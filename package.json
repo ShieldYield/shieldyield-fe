@@ -10,12 +10,15 @@
   },
   "dependencies": {
     "@chainlink/data-streams-sdk": "^1.2.1",
+    "@supabase/supabase-js": "^2.97.0",
     "clsx": "^2.1.1",
     "framer-motion": "^12.34.3",
     "next": "16.1.6",
     "react": "19.2.3",
     "react-dom": "19.2.3",
-    "react-icons": "^5.5.0"
+    "react-icons": "^5.5.0",
+    "recharts": "^3.7.0",
+    "viem": "^2.46.2"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
