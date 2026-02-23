@@ -3,6 +3,127 @@ import { createPublicClient, http, formatUnits, type Address } from "viem";
 import { arbitrumSepolia } from "viem/chains";
 
 // ============================================================================
+// DeFiLlama APY Integration
+// Fetch real-world APY for each adapter from DeFiLlama yields API.
+// YieldMax = highest APY found across all USDC pools on Arbitrum.
+// ============================================================================
+
+const DEFILLAMA_POOLS_URL = "https://yields.llama.fi/pools";
+
+// DeFiLlama project slugs for each adapter (try multiple slugs per protocol)
+const ADAPTER_DEFILLAMA_PROJECTS: Record<string, string[]> = {
+  AaveAdapter: ["aave-v3"],
+  CompoundAdapter: ["compound-v3"],
+  MorphoAdapter: ["morpho-v1"],
+};
+
+// For adapters that are mockups on testnet, fetch APY reference from another chain.
+// MorphoAdapter is deployed as a mockup on Arbitrum Sepolia — real morpho-blue lives on Ethereum.
+const ADAPTER_CHAIN_OVERRIDE: Record<string, string> = {
+  MorphoAdapter: "Ethereum",
+};
+
+export interface YieldPool {
+  protocol: string;
+  apy: number;
+}
+
+interface DefiLlamaResult {
+  apys: Record<string, number>;
+  yieldMaxTopPools: YieldPool[];
+}
+
+let defiLlamaApyCache: { data: DefiLlamaResult; timestamp: number } | null = null;
+const DEFILLAMA_CACHE_TTL_MS = 30_000;
+
+// Known lending/yield protocols (exclude LP/AMM/perps)
+const EXCLUDED_PROJECTS = new Set([
+  "uniswap-v3", "uniswap-v4", "curve-dex", "balancer-v2",
+  "pancakeswap-amm-v3", "gmx-v2-perps", "steer-protocol",
+  "gamma", "beefy", "hermes-v2", "acryptos",
+]);
+
+async function fetchDefiLlamaApys(): Promise<DefiLlamaResult> {
+  const empty: DefiLlamaResult = { apys: {}, yieldMaxTopPools: [] };
+
+  if (defiLlamaApyCache && Date.now() - defiLlamaApyCache.timestamp < DEFILLAMA_CACHE_TTL_MS) {
+    return defiLlamaApyCache.data;
+  }
+
+  try {
+    const res = await fetch(DEFILLAMA_POOLS_URL, {
+      headers: { Accept: "application/json" },
+      next: { revalidate: 30 },
+    });
+    if (!res.ok) return empty;
+
+    const { data: pools } = await res.json();
+
+    const round2 = (n: number) => Math.round((n ?? 0) * 100) / 100;
+
+    // Filter: pure USDC pools on Arbitrum (not pairs, not perps, sane APY)
+    const usdcPools: Array<{ project: string; symbol: string; apy: number; apyBase: number | null }> =
+      pools.filter((p: { chain: string; symbol: string; project: string; apy: number }) =>
+        p.chain === "Arbitrum" &&
+        p.symbol.toUpperCase() === "USDC" &&      // exact match, not WETH-USDC pairs
+        !EXCLUDED_PROJECTS.has(p.project) &&
+        (p.apy ?? 0) > 0 &&
+        (p.apy ?? 0) < 50                          // filter outliers
+      );
+
+    // Per-protocol APY — only set if pool found → missing = fallback to on-chain
+    const apys: Record<string, number> = {};
+    for (const [adapterName, slugs] of Object.entries(ADAPTER_DEFILLAMA_PROJECTS)) {
+      // Try Arbitrum first
+      let pool = usdcPools.find((p) => slugs.includes(p.project));
+
+      // If not found on Arbitrum and adapter has a chain override, search that chain
+      if (!pool && ADAPTER_CHAIN_OVERRIDE[adapterName]) {
+        const overrideChain = ADAPTER_CHAIN_OVERRIDE[adapterName];
+        // Use .includes("USDC") — morpho-blue pools may have symbols like "USDC (WETH)"
+        const crossChainPool = pools.find(
+          (p: { chain: string; symbol: string; project: string; apy: number }) =>
+            p.chain === overrideChain &&
+            p.symbol.toUpperCase().includes("USDC") &&
+            slugs.includes(p.project) &&
+            (p.apy ?? 0) > 0 &&
+            (p.apy ?? 0) < 50
+        );
+        if (crossChainPool) {
+          console.log(`[portfolio/live] ${adapterName} cross-chain (${overrideChain}): ${crossChainPool.project} ${crossChainPool.symbol} APY=${crossChainPool.apy}`);
+          pool = crossChainPool;
+        } else {
+          console.warn(`[portfolio/live] ${adapterName} not found on ${overrideChain}, falling back to on-chain APY`);
+        }
+      }
+
+      if (pool) {
+        apys[adapterName] = round2(pool.apy || pool.apyBase || 0);
+      }
+    }
+
+    // YieldMax = top 5 Arbitrum USDC pools sorted by APY desc
+    const sorted = [...usdcPools].sort((a, b) => (b.apy ?? 0) - (a.apy ?? 0));
+    const yieldMaxTopPools: YieldPool[] = sorted.slice(0, 5).map((p) => ({
+      protocol: p.project,
+      apy: round2(p.apy),
+    }));
+
+    // YieldMax APY = highest pool APY
+    if (yieldMaxTopPools.length > 0) {
+      apys["YieldMaxAdapter"] = yieldMaxTopPools[0].apy;
+    }
+
+    const result: DefiLlamaResult = { apys, yieldMaxTopPools };
+    defiLlamaApyCache = { data: result, timestamp: Date.now() };
+    return result;
+  } catch (err) {
+    console.error("[portfolio/live] DeFiLlama fetch failed:", err);
+    return empty;
+  }
+}
+
+// ============================================================================
 // Contract Addresses (Arbitrum Sepolia)
 // ============================================================================
 
@@ -223,10 +344,13 @@ export async function GET(request: NextRequest) {
       },
     ]);
 
-    const [vaultResults, adapterResults] = await Promise.all([
+    const [vaultResults, adapterResults, defiLlama] = await Promise.all([
       client.multicall({ contracts: vaultCalls }),
       client.multicall({ contracts: adapterCalls }),
+      fetchDefiLlamaApys(),
     ]);
+    const defiLlamaApys = defiLlama.apys;
+    const yieldMaxTopPools = defiLlama.yieldMaxTopPools;
 
     // Parse vault results
     const userBalance =
@@ -294,16 +418,23 @@ export async function GET(request: NextRequest) {
       const prevBalance = previousBalances.get(name) ?? 0;
       const adapterChange = calcChange(balanceUsd, prevBalance);
 
+      // Use DeFiLlama APY if available, fallback to on-chain value
+      const onChainApy = Number(apyBps) / 100;
+      const apy = defiLlamaApys[name] ?? onChainApy;
+
       adapters[name] = {
         address: addr,
         balance: balanceUsd,
-        apy: Number(apyBps) / 100, // basis points to percentage
+        apy,
         isHealthy: healthy,
         principal: principalUsd,
         accruedYield: Math.max(0, balanceUsd - principalUsd),
         allocation,
         changePercent: adapterChange.changePercent,
         changeDirection: adapterChange.changeDirection,
+        ...(name === "YieldMaxAdapter" && yieldMaxTopPools.length > 0
+          ? { topPools: yieldMaxTopPools }
+          : {}),
       };
 
       // Update global previous balance for next comparison

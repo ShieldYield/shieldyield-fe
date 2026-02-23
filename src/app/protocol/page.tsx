@@ -171,6 +171,92 @@ export default function ProtocolPage() {
                             )}
                         </div>
 
+                        {/* YieldMax Top Opportunities */}
+                        {adapters['YieldMaxAdapter']?.topPools?.length > 0 && (
+                            <div className="bg-zinc-900/60 border border-zinc-800 rounded-2xl p-5">
+                                <div className="flex items-center gap-2 mb-1">
+                                    <span className="text-base">🟡</span>
+                                    <h3 className="text-sm font-semibold text-zinc-300 uppercase tracking-wider">
+                                        YieldMax — Top USDC Opportunities
+                                    </h3>
+                                    <span className="ml-auto text-[10px] text-zinc-500 bg-zinc-800 px-2 py-0.5 rounded-full">Arbitrum · DeFiLlama</span>
+                                </div>
+                                <p className="text-[11px] text-zinc-500 mb-4">
+                                    YieldMax routes funds to the highest-yielding USDC lending protocol on Arbitrum, rebalancing automatically.
+                                </p>
+                                <div className="space-y-1.5">
+                                    {adapters['YieldMaxAdapter'].topPools.map((pool: { protocol: string; apy: number }, i: number) => (
+                                        <div key={pool.protocol} className={`flex items-center justify-between px-3 py-2.5 rounded-xl ${i === 0 ? 'bg-yellow-500/10 border border-yellow-500/20' : 'bg-zinc-800/40'}`}>
+                                            <div className="flex items-center gap-2.5">
+                                                <span className="text-[10px] text-zinc-600 w-4">#{i + 1}</span>
+                                                <span className={`text-xs font-medium capitalize ${i === 0 ? 'text-zinc-100' : 'text-zinc-300'}`}>
+                                                    {pool.protocol.replace(/-/g, ' ')}
+                                                </span>
+                                                {i === 0 && <span className="text-[9px] bg-yellow-500/20 text-yellow-400 px-1.5 py-0.5 rounded-full">active</span>}
+                                            </div>
+                                            <span className={`text-sm font-bold ${i === 0 ? 'text-yellow-400' : 'text-emerald-400'}`}>
+                                                {pool.apy.toFixed(2)}%
+                                            </span>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+
+                        {/* CCIP Safe Haven */}
+                        {defiMetrics?.safeHaven && (
+                            <div className="bg-zinc-900/60 border border-zinc-800 rounded-2xl p-5">
+                                <div className="flex items-center gap-2 mb-1">
+                                    <span className="text-base">🔗</span>
+                                    <h3 className="text-sm font-semibold text-zinc-300 uppercase tracking-wider">
+                                        CCIP Safe Haven
+                                    </h3>
+                                </div>
+                                <p className="text-[11px] text-zinc-500 mb-4">
+                                    When risk is <span className="text-red-400 font-semibold">CRITICAL</span>, funds bridge via Chainlink CCIP to Base and re-deploy into safe lending protocols.
+                                </p>
+
+                                {/* Column headers */}
+                                <div className="grid grid-cols-3 gap-2 mb-2 px-1">
+                                    <div />
+                                    <p className="text-[10px] text-zinc-500 text-center uppercase tracking-wider">Arbitrum</p>
+                                    <p className="text-[10px] text-cyan-500/70 text-center uppercase tracking-wider">Base ← safe</p>
+                                </div>
+
+                                {/* Aave row */}
+                                <div className="grid grid-cols-3 gap-2 items-center mb-2">
+                                    <div className="flex items-center gap-1.5">
+                                        <span className="text-sm">🔵</span>
+                                        <span className="text-xs font-semibold text-zinc-300">Aave v3</span>
+                                    </div>
+                                    <div className="p-2.5 bg-zinc-800/40 rounded-xl text-center">
+                                        <p className="text-sm font-semibold text-emerald-400">{defiMetrics.aave?.supplyApy ?? '—'}%</p>
+                                        <p className="text-[10px] text-zinc-600 mt-0.5">util {defiMetrics.aave?.utilization ?? '—'}%</p>
+                                    </div>
+                                    <div className="p-2.5 bg-zinc-800/40 rounded-xl text-center border border-cyan-500/20">
+                                        <p className="text-sm font-semibold text-emerald-400">{defiMetrics.safeHaven.aave?.supplyApy ?? '—'}%</p>
+                                        <p className="text-[10px] text-zinc-600 mt-0.5">util {defiMetrics.safeHaven.aave?.utilization ?? '—'}%</p>
+                                    </div>
+                                </div>
+
+                                {/* Compound row */}
+                                <div className="grid grid-cols-3 gap-2 items-center">
+                                    <div className="flex items-center gap-1.5">
+                                        <span className="text-sm">🟢</span>
+                                        <span className="text-xs font-semibold text-zinc-300">Compound v3</span>
+                                    </div>
+                                    <div className="p-2.5 bg-zinc-800/40 rounded-xl text-center">
+                                        <p className="text-sm font-semibold text-emerald-400">{defiMetrics.compound?.supplyApr ?? '—'}%</p>
+                                        <p className="text-[10px] text-zinc-600 mt-0.5">util {defiMetrics.compound?.utilization ?? '—'}%</p>
+                                    </div>
+                                    <div className="p-2.5 bg-zinc-800/40 rounded-xl text-center border border-cyan-500/20">
+                                        <p className="text-sm font-semibold text-emerald-400">{defiMetrics.safeHaven.compound?.supplyApr ?? '—'}%</p>
+                                        <p className="text-[10px] text-zinc-600 mt-0.5">util {defiMetrics.safeHaven.compound?.utilization ?? '—'}%</p>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
                         {/* Protocol Detail + Activity */}
                         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                             {/* DeFi Metrics Detail */}
