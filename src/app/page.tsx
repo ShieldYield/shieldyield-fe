@@ -1,58 +1,76 @@
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
-import { AdapterCard, PortfolioChart, AnomalyTicker, RiskBadge } from '../components/Dashboard';
+import { useAccount } from 'wagmi';
+import { AdapterCard, RiskBadge } from '../components/Dashboard';
 import { Header } from '../components/Header';
 import { Navbar } from '../components/Navbar';
 
-// Default wallet for testing (from deployed contracts)
-const DEFAULT_WALLET = '0xcFBd47c63D284A8F824e586596Df4d5c57326c8B';
-
-interface SnapshotData {
-  snapshot: any;
-  defiMetrics: { aave: any; compound: any };
-  recentAnomalies: any[];
-}
-
-interface HistoryData {
-  history: Array<{ timestamp: string; totalValueUsd: number }>;
+interface PortfolioData {
+  totalValueUsd: number;
+  totalChangePercent: number;
+  totalChangeDirection: 'up' | 'down' | 'neutral';
+  adapters: Record<string, any>;
+  riskScores: Record<string, any>;
 }
 
 export default function Home() {
-  const [snapshot, setSnapshot] = useState<SnapshotData | null>(null);
-  const [history, setHistory] = useState<HistoryData | null>(null);
-  const [period, setPeriod] = useState('1d');
+  const [portfolio, setPortfolio] = useState<PortfolioData | null>(null);
+  const [defiMetrics, setDefiMetrics] = useState<{ aave: any; compound: any } | null>(null);
   const [loading, setLoading] = useState(true);
 
-  const wallet = DEFAULT_WALLET;
+  const { address: connectedWallet, isConnected } = useAccount();
+  const wallet = isConnected ? connectedWallet : null;
 
   const fetchData = useCallback(async () => {
+    if (!wallet) {
+      setPortfolio(null);
+      setDefiMetrics(null);
+      setLoading(false);
+      return;
+    }
+
     try {
-      const [snapRes, histRes] = await Promise.all([
-        fetch(`/api/monitoring/snapshot?wallet=${wallet}`),
-        fetch(`/api/portfolio/history?wallet=${wallet}&period=${period}`),
+      const [portRes, metricsRes] = await Promise.all([
+        fetch(`/api/portfolio/live?wallet=${wallet}`),
+        fetch('/api/defi-metrics'),
       ]);
-      if (snapRes.ok) setSnapshot(await snapRes.json());
-      if (histRes.ok) setHistory(await histRes.json());
+
+      if (portRes.ok) {
+        const data = await portRes.json();
+        setPortfolio(data);
+      }
+      if (metricsRes.ok) {
+        const data = await metricsRes.json();
+        setDefiMetrics({ aave: data.aave, compound: data.compound });
+      }
     } catch (err) {
       console.error('Failed to fetch data:', err);
     } finally {
       setLoading(false);
     }
-  }, [wallet, period]);
+  }, [wallet]);
 
   useEffect(() => {
+    setLoading(true);
     fetchData();
-    const interval = setInterval(fetchData, 30000); // Refresh every 30s
+    const interval = setInterval(fetchData, 15000);
     return () => clearInterval(interval);
   }, [fetchData]);
 
-  const adapters: Record<string, any> = snapshot?.snapshot?.adapters || {};
-  const riskScores: Record<string, any> = snapshot?.snapshot?.risk_scores || {};
-  const totalValue = snapshot?.snapshot?.total_value_usd || 0;
-  const anomalies = snapshot?.recentAnomalies || [];
+  useEffect(() => {
+    if (!isConnected) {
+      setPortfolio(null);
+      setDefiMetrics(null);
+    }
+  }, [isConnected]);
 
-  // Determine overall risk
+  const adapters: Record<string, any> = portfolio?.adapters || {};
+  const riskScores: Record<string, any> = portfolio?.riskScores || {};
+  const totalValue = portfolio?.totalValueUsd || 0;
+  const totalChangePercent = portfolio?.totalChangePercent ?? 0;
+  const totalChangeDirection = portfolio?.totalChangeDirection ?? 'neutral';
+
   const overallLevel = Object.values(riskScores).reduce(
     (worst: string, r: any) => {
       const order = ['SAFE', 'WATCH', 'WARNING', 'CRITICAL'];
@@ -60,6 +78,8 @@ export default function Home() {
     },
     'SAFE'
   );
+
+  const showConnectPrompt = !isConnected && !portfolio;
 
   return (
     <div className="flex flex-col w-full min-h-screen bg-zinc-950 transition-all duration-300">
@@ -75,30 +95,50 @@ export default function Home() {
               <p className="text-sm text-zinc-500">Loading dashboard...</p>
             </div>
           </div>
+        ) : showConnectPrompt ? (
+          <div className="flex items-center justify-center h-[60vh]">
+            <div className="flex flex-col items-center gap-4 text-center">
+              <div className="w-16 h-16 rounded-2xl bg-zinc-800/50 border border-zinc-700 flex items-center justify-center">
+                <span className="text-3xl">🛡️</span>
+              </div>
+              <h2 className="text-xl font-bold text-zinc-200">
+                Welcome to Shield<span className="text-cyan-400">Yield</span>
+              </h2>
+              <p className="text-sm text-zinc-500 max-w-sm">
+                Connect your wallet to monitor your DeFi portfolio, view risk scores, and receive real-time anomaly alerts.
+              </p>
+              <div className="mt-2 px-4 py-2 bg-zinc-800/60 rounded-lg border border-zinc-700">
+                <p className="text-xs text-zinc-600">
+                  Click <span className="text-cyan-400 font-medium">Connect Wallet</span> in the top right corner
+                </p>
+              </div>
+            </div>
+          </div>
         ) : (
           <div className="space-y-6 max-w-7xl mx-auto">
-            {/* Anomaly Ticker */}
-            <AnomalyTicker anomalies={anomalies} />
-
-            {/* Hero: Total Value + Risk */}
+            {/* Hero: Total Value + Change Indicator + Risk */}
             <div className="flex items-end justify-between">
               <div>
                 <p className="text-xs text-zinc-500 uppercase tracking-wider mb-1">Total Portfolio Value</p>
-                <p className="text-4xl md:text-5xl font-bold text-zinc-50 tracking-tight">
-                  ${totalValue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                </p>
+                <div className="flex items-baseline gap-3">
+                  <p className="text-4xl md:text-5xl font-bold text-zinc-50 tracking-tight">
+                    ${totalValue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  </p>
+                  {totalChangeDirection !== 'neutral' && (
+                    <span className={`flex items-center gap-1 text-sm font-semibold ${
+                      totalChangeDirection === 'up' ? 'text-emerald-400' : 'text-red-400'
+                    }`}>
+                      <span>{totalChangeDirection === 'up' ? '▲' : '▼'}</span>
+                      {totalChangePercent.toFixed(2)}%
+                    </span>
+                  )}
+                </div>
               </div>
               <div className="flex items-center gap-2">
                 <span className="text-xs text-zinc-500">Overall Risk:</span>
                 <RiskBadge level={overallLevel} size="lg" />
               </div>
             </div>
-
-            {/* Portfolio Chart */}
-            <PortfolioChart
-              data={history?.history || []}
-              onPeriodChange={setPeriod}
-            />
 
             {/* Adapter Cards */}
             <div>
@@ -115,17 +155,17 @@ export default function Home() {
               </div>
               {Object.keys(adapters).length === 0 && (
                 <div className="text-center py-12">
-                  <p className="text-sm text-zinc-600">No adapter data yet. CRE monitoring will populate this after its first run.</p>
+                  <p className="text-sm text-zinc-600">No adapter data yet. Deposit into ShieldVault to see your portfolio.</p>
                 </div>
               )}
             </div>
 
             {/* DeFi Metrics Summary */}
-            {(snapshot?.defiMetrics?.aave || snapshot?.defiMetrics?.compound) && (
+            {(defiMetrics?.aave || defiMetrics?.compound) && (
               <div className="bg-zinc-900/60 border border-zinc-800 rounded-2xl p-5">
                 <h3 className="text-sm font-semibold text-zinc-400 uppercase tracking-wider mb-3">Live DeFi Metrics</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {snapshot.defiMetrics.aave && (
+                  {defiMetrics.aave && (
                     <div className="p-4 bg-zinc-800/40 rounded-xl">
                       <div className="flex items-center gap-2 mb-2">
                         <span>🔵</span>
@@ -134,20 +174,20 @@ export default function Home() {
                       <div className="grid grid-cols-3 gap-3 text-center">
                         <div>
                           <p className="text-[10px] text-zinc-500 uppercase">Supply APY</p>
-                          <p className="text-sm font-semibold text-emerald-400">{snapshot.defiMetrics.aave.supplyApy}%</p>
+                          <p className="text-sm font-semibold text-emerald-400">{defiMetrics.aave.supplyApy}%</p>
                         </div>
                         <div>
                           <p className="text-[10px] text-zinc-500 uppercase">Borrow APY</p>
-                          <p className="text-sm font-semibold text-orange-400">{snapshot.defiMetrics.aave.borrowApy}%</p>
+                          <p className="text-sm font-semibold text-orange-400">{defiMetrics.aave.borrowApy}%</p>
                         </div>
                         <div>
                           <p className="text-[10px] text-zinc-500 uppercase">Utilization</p>
-                          <p className="text-sm font-semibold text-zinc-300">{snapshot.defiMetrics.aave.utilization}%</p>
+                          <p className="text-sm font-semibold text-zinc-300">{defiMetrics.aave.utilization}%</p>
                         </div>
                       </div>
                     </div>
                   )}
-                  {snapshot.defiMetrics.compound && (
+                  {defiMetrics.compound && (
                     <div className="p-4 bg-zinc-800/40 rounded-xl">
                       <div className="flex items-center gap-2 mb-2">
                         <span>🟢</span>
@@ -156,15 +196,15 @@ export default function Home() {
                       <div className="grid grid-cols-3 gap-3 text-center">
                         <div>
                           <p className="text-[10px] text-zinc-500 uppercase">Supply APR</p>
-                          <p className="text-sm font-semibold text-emerald-400">{snapshot.defiMetrics.compound.supplyApr}%</p>
+                          <p className="text-sm font-semibold text-emerald-400">{defiMetrics.compound.supplyApr}%</p>
                         </div>
                         <div>
                           <p className="text-[10px] text-zinc-500 uppercase">Borrow APR</p>
-                          <p className="text-sm font-semibold text-orange-400">{snapshot.defiMetrics.compound.borrowApr}%</p>
+                          <p className="text-sm font-semibold text-orange-400">{defiMetrics.compound.borrowApr}%</p>
                         </div>
                         <div>
                           <p className="text-[10px] text-zinc-500 uppercase">Utilization</p>
-                          <p className="text-sm font-semibold text-zinc-300">{snapshot.defiMetrics.compound.utilization}%</p>
+                          <p className="text-sm font-semibold text-zinc-300">{defiMetrics.compound.utilization}%</p>
                         </div>
                       </div>
                     </div>

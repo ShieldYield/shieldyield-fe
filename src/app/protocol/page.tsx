@@ -1,11 +1,11 @@
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
+import { useAccount } from 'wagmi';
 import { RiskBadge, ActivityFeed } from '../../components/Dashboard';
 import { Header } from '../../components/Header';
 import { Navbar } from '../../components/Navbar';
-
-const DEFAULT_WALLET = '0xcFBd47c63D284A8F824e586596Df4d5c57326c8B';
+import { getProtocolLink } from '../../lib/protocol-links';
 
 export default function ProtocolPage() {
     const [portfolio, setPortfolio] = useState<any>(null);
@@ -14,20 +14,22 @@ export default function ProtocolPage() {
     const [loading, setLoading] = useState(true);
     const [selectedAdapter, setSelectedAdapter] = useState<string | null>(null);
 
-    const wallet = DEFAULT_WALLET;
+    const { address: connectedWallet, isConnected } = useAccount();
+    const wallet = isConnected ? connectedWallet : null;
 
     const fetchData = useCallback(async () => {
+        if (!wallet) {
+            setPortfolio(null);
+            setLogs([]);
+            setLoading(false);
+            return;
+        }
         try {
-            const [portRes, logsRes, metricsRes] = await Promise.all([
-                fetch(`/api/portfolio/current?wallet=${wallet}`),
-                fetch(`/api/monitoring/logs?wallet=${wallet}&limit=50`),
+            const [portRes, metricsRes] = await Promise.all([
+                fetch(`/api/portfolio/live?wallet=${wallet}`),
                 fetch('/api/defi-metrics'),
             ]);
             if (portRes.ok) setPortfolio(await portRes.json());
-            if (logsRes.ok) {
-                const data = await logsRes.json();
-                setLogs(data.logs || []);
-            }
             if (metricsRes.ok) setDefiMetrics(await metricsRes.json());
         } catch (err) {
             console.error('Failed to fetch:', err);
@@ -37,8 +39,19 @@ export default function ProtocolPage() {
     }, [wallet]);
 
     useEffect(() => {
+        setLoading(true);
         fetchData();
+        const interval = setInterval(fetchData, 15000);
+        return () => clearInterval(interval);
     }, [fetchData]);
+
+    // Clear state on disconnect
+    useEffect(() => {
+        if (!isConnected) {
+            setPortfolio(null);
+            setLogs([]);
+        }
+    }, [isConnected]);
 
     const adapters: Record<string, any> = portfolio?.adapters || {};
     const riskScores: Record<string, any> = portfolio?.riskScores || {};
@@ -80,6 +93,7 @@ export default function ProtocolPage() {
                                         <th className="text-right text-[10px] uppercase tracking-wider text-zinc-500 px-5 py-3">Allocation</th>
                                         <th className="text-center text-[10px] uppercase tracking-wider text-zinc-500 px-5 py-3">Risk</th>
                                         <th className="text-right text-[10px] uppercase tracking-wider text-zinc-500 px-5 py-3">Utilization</th>
+                                        <th className="text-center text-[10px] uppercase tracking-wider text-zinc-500 px-5 py-3">Link</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -87,7 +101,7 @@ export default function ProtocolPage() {
                                         const meta = protocolMeta[name] || { icon: '⚪', color: 'from-zinc-500/20', metricsKey: '' };
                                         const risk = riskScores[name];
                                         const metrics = meta.metricsKey ? defiMetrics?.[meta.metricsKey] : null;
-                                        const util = metrics?.utilization ?? metrics?.utilization ?? '—';
+                                        const util = metrics?.utilization ?? '—';
 
                                         return (
                                             <tr
@@ -128,6 +142,22 @@ export default function ProtocolPage() {
                                                 </td>
                                                 <td className="text-right px-5 py-4 text-sm text-zinc-400">
                                                     {typeof util === 'number' ? `${util.toFixed(1)}%` : util}
+                                                </td>
+                                                <td className="text-center px-5 py-4">
+                                                    {(() => {
+                                                        const link = getProtocolLink(name);
+                                                        return link ? (
+                                                            <a
+                                                                href={link.url}
+                                                                target="_blank"
+                                                                rel="noopener noreferrer"
+                                                                onClick={(e) => e.stopPropagation()}
+                                                                className="text-xs text-cyan-400 hover:text-cyan-300 transition-colors"
+                                                            >
+                                                                View ↗
+                                                            </a>
+                                                        ) : null;
+                                                    })()}
                                                 </td>
                                             </tr>
                                         );

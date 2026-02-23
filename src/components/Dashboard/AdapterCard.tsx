@@ -10,6 +10,8 @@ interface AdapterData {
     principal: number;
     accruedYield: number;
     allocation: number;
+    changePercent?: number;
+    changeDirection?: 'up' | 'down' | 'neutral';
 }
 
 interface AdapterCardProps {
@@ -47,11 +49,21 @@ export default function AdapterCard({ name, data, riskScore }: AdapterCardProps)
                     )}
                 </div>
 
-                {/* Balance */}
+                {/* Balance + Change Indicator */}
                 <div className="mb-3">
-                    <p className="text-2xl font-bold text-zinc-50 tracking-tight">
-                        ${data.balance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                    </p>
+                    <div className="flex items-baseline gap-2">
+                        <p className="text-2xl font-bold text-zinc-50 tracking-tight">
+                            ${data.balance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        </p>
+                        {data.changeDirection && data.changeDirection !== 'neutral' && (
+                            <span className={`flex items-center gap-0.5 text-xs font-semibold ${
+                                data.changeDirection === 'up' ? 'text-emerald-400' : 'text-red-400'
+                            }`}>
+                                <span>{data.changeDirection === 'up' ? '▲' : '▼'}</span>
+                                {(data.changePercent ?? 0).toFixed(2)}%
+                            </span>
+                        )}
+                    </div>
                     <p className="text-xs text-zinc-500 mt-0.5">
                         Principal: ${data.principal.toLocaleString('en-US', { minimumFractionDigits: 2 })}
                     </p>
