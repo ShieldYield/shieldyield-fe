@@ -2,7 +2,8 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import { useAccount } from 'wagmi';
-import { RiskBadge, ActivityFeed } from '../../components/Dashboard';
+import { RiskBadge, ActivityFeed, SentinelBanner } from '../../components/Dashboard';
+import type { SentinelData } from '../../components/Dashboard';
 import { Header } from '../../components/Header';
 import { Navbar } from '../../components/Navbar';
 import { getProtocolLink } from '../../lib/protocol-links';
@@ -13,6 +14,8 @@ export default function ProtocolPage() {
     const [defiMetrics, setDefiMetrics] = useState<any>(null);
     const [loading, setLoading] = useState(true);
     const [selectedAdapter, setSelectedAdapter] = useState<string | null>(null);
+    const [sentinelData, setSentinelData] = useState<SentinelData | null>(null);
+    const [sentinelLoading, setSentinelLoading] = useState(false);
 
     const { address: connectedWallet, isConnected } = useAccount();
     const wallet = isConnected ? connectedWallet : null;
@@ -52,6 +55,28 @@ export default function ProtocolPage() {
             setLogs([]);
         }
     }, [isConnected]);
+
+    // Fetch AI Sentinel for selected adapter
+    useEffect(() => {
+        if (!selectedAdapter) {
+            setSentinelData(null);
+            return;
+        }
+        let cancelled = false;
+        setSentinelLoading(true);
+        fetch(`/api/ai-sentinel?protocol=${selectedAdapter}`)
+            .then((res) => res.ok ? res.json() : null)
+            .then((data) => {
+                if (!cancelled) setSentinelData(data);
+            })
+            .catch(() => {
+                if (!cancelled) setSentinelData(null);
+            })
+            .finally(() => {
+                if (!cancelled) setSentinelLoading(false);
+            });
+        return () => { cancelled = true; };
+    }, [selectedAdapter]);
 
     const adapters: Record<string, any> = portfolio?.adapters || {};
     const riskScores: Record<string, any> = portfolio?.riskScores || {};
@@ -312,6 +337,13 @@ export default function ProtocolPage() {
                                             </div>
                                         );
                                     })()}
+                                </div>
+                            )}
+
+                            {/* AI Sentinel per-adapter */}
+                            {selectedAdapter && (
+                                <div className="lg:col-span-2">
+                                    <SentinelBanner data={sentinelData} loading={sentinelLoading} />
                                 </div>
                             )}
 

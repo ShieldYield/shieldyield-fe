@@ -2,7 +2,8 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import { useAccount } from 'wagmi';
-import { AdapterCard, RiskBadge } from '../components/Dashboard';
+import { AdapterCard, RiskBadge, SentinelBanner } from '../components/Dashboard';
+import type { SentinelData } from '../components/Dashboard';
 import { Header } from '../components/Header';
 import { Navbar } from '../components/Navbar';
 
@@ -17,6 +18,8 @@ interface PortfolioData {
 export default function Home() {
   const [portfolio, setPortfolio] = useState<PortfolioData | null>(null);
   const [defiMetrics, setDefiMetrics] = useState<{ aave: any; compound: any } | null>(null);
+  const [sentinel, setSentinel] = useState<SentinelData | null>(null);
+  const [sentinelLoading, setSentinelLoading] = useState(true);
   const [loading, setLoading] = useState(true);
 
   const { address: connectedWallet, isConnected } = useAccount();
@@ -26,14 +29,17 @@ export default function Home() {
     if (!wallet) {
       setPortfolio(null);
       setDefiMetrics(null);
+      setSentinel(null);
       setLoading(false);
+      setSentinelLoading(false);
       return;
     }
 
     try {
-      const [portRes, metricsRes] = await Promise.all([
+      const [portRes, metricsRes, sentinelRes] = await Promise.all([
         fetch(`/api/portfolio/live?wallet=${wallet}`),
         fetch('/api/defi-metrics'),
+        fetch('/api/ai-sentinel?protocol=AaveAdapter'),
       ]);
 
       if (portRes.ok) {
@@ -44,10 +50,15 @@ export default function Home() {
         const data = await metricsRes.json();
         setDefiMetrics({ aave: data.aave, compound: data.compound });
       }
+      if (sentinelRes.ok) {
+        const data = await sentinelRes.json();
+        setSentinel(data);
+      }
     } catch (err) {
       console.error('Failed to fetch data:', err);
     } finally {
       setLoading(false);
+      setSentinelLoading(false);
     }
   }, [wallet]);
 
@@ -62,6 +73,7 @@ export default function Home() {
     if (!isConnected) {
       setPortfolio(null);
       setDefiMetrics(null);
+      setSentinel(null);
     }
   }, [isConnected]);
 
@@ -139,6 +151,9 @@ export default function Home() {
                 <RiskBadge level={overallLevel} size="lg" />
               </div>
             </div>
+
+            {/* AI Sentinel Banner */}
+            <SentinelBanner data={sentinel} loading={sentinelLoading} />
 
             {/* Adapter Cards */}
             <div>
