@@ -1,5 +1,8 @@
 'use client';
 
+import { useState } from 'react';
+import AiTransparencyPanel from './AiTransparencyPanel';
+
 export interface SentinelSignal {
   source: string;
   signal: string;
@@ -18,6 +21,11 @@ export interface SentinelData {
     openIssues: number;
     lastPushDaysAgo: number;
   };
+  sources: {
+    githubUrl: string;
+    cryptoPanicUrl: string;
+  };
+  newsHeadlines: string[];
   timestamp: string;
 }
 
@@ -48,13 +56,13 @@ function getRecBadge(rec: string) {
 export default function SentinelBanner({ data, loading }: SentinelBannerProps) {
   if (loading) {
     return (
-      <div className="bg-zinc-900/60 border border-zinc-800 rounded-2xl p-5 animate-pulse">
-        <div className="flex items-center gap-2 mb-3">
-          <div className="w-5 h-5 bg-zinc-700 rounded" />
-          <div className="h-4 w-40 bg-zinc-700 rounded" />
+      <div className="bg-zinc-900/60 border border-zinc-800 rounded-2xl p-6 animate-pulse">
+        <div className="flex items-center gap-3 mb-4">
+          <div className="w-8 h-8 bg-zinc-700 rounded-lg" />
+          <div className="h-6 w-48 bg-zinc-700 rounded-lg" />
         </div>
-        <div className="h-3 w-3/4 bg-zinc-800 rounded mb-2" />
-        <div className="h-3 w-1/2 bg-zinc-800 rounded" />
+        <div className="h-4 w-3/4 bg-zinc-800 rounded mb-3" />
+        <div className="h-4 w-1/2 bg-zinc-800 rounded" />
       </div>
     );
   }
@@ -62,56 +70,30 @@ export default function SentinelBanner({ data, loading }: SentinelBannerProps) {
   if (!data) return null;
 
   const threat = getThreatColor(data.ai_threat_score);
-  const confidencePct = Math.round(data.confidence * 100);
 
   return (
-    <div className={`${threat.bg} border ${threat.border} rounded-2xl p-5 transition-all`}>
-      {/* Header */}
-      <div className="flex items-center justify-between mb-3">
-        <div className="flex items-center gap-2">
-          <span className="text-lg">🤖</span>
-          <span className="text-sm font-semibold text-zinc-200">AI Sentinel</span>
-          <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full ${threat.bg} ${threat.text} border ${threat.border}`}>
-            {threat.label} ({data.ai_threat_score}/100)
-          </span>
+    <div className={`${threat.bg} border ${threat.border} rounded-2xl p-6 transition-all`}>
+      {/* ─── Banner Header ─── */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-8">
+        <div className="flex items-center gap-4">
+          <span className="text-2xl">🤖</span>
+          <div>
+            <h3 className="text-base font-medium text-zinc-100 mb-1">Sentinel AI Analyst</h3>
+            <p className="text-xs font-light text-zinc-400">Continuous Off-chain Monitoring</p>
+          </div>
         </div>
-        <div className="flex items-center gap-2">
-          <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${getRecBadge(data.recommendation)}`}>
-            {data.recommendation}
+        <div className="flex flex-wrap items-center gap-4">
+          <span className={`text-xs font-medium px-4 py-1.5 rounded-full ${threat.bg} ${threat.text} border ${threat.border}`}>
+            {threat.label} RISK
           </span>
-          <span className="text-[10px] text-zinc-500">
-            {confidencePct}% confidence
+          <span className={`text-xs font-medium px-4 py-1.5 rounded-full ${getRecBadge(data.recommendation)} border border-transparent`}>
+            ACTION: {data.recommendation}
           </span>
         </div>
       </div>
 
-      {/* Reasoning */}
-      <p className="text-sm text-zinc-300 mb-3 leading-relaxed">
-        {data.reasoning}
-      </p>
-
-      {/* Signal Pills */}
-      {data.signals.length > 0 && (
-        <div className="flex flex-wrap gap-2 mb-3">
-          {data.signals.map((s, i) => (
-            <span
-              key={i}
-              className={`text-[10px] px-2 py-1 rounded-full border ${getSentimentColor(s.sentiment)}`}
-            >
-              {s.source}: {s.signal.length > 60 ? s.signal.slice(0, 57) + '...' : s.signal}
-            </span>
-          ))}
-        </div>
-      )}
-
-      {/* GitHub Quick Stats */}
-      <div className="flex items-center gap-4 text-[10px] text-zinc-500">
-        <span>GitHub: last push {data.github.lastPushDaysAgo}d ago</span>
-        <span>{data.github.openIssues} open issues</span>
-        <span className="ml-auto">
-          {new Date(data.timestamp).toLocaleTimeString()}
-        </span>
-      </div>
+      {/* ─── Integrated AI Details Panel ─── */}
+      <AiTransparencyPanel data={data} />
     </div>
   );
 }

@@ -129,36 +129,37 @@ export default function Home() {
         ) : (
           <div className="space-y-6 max-w-7xl mx-auto">
             {/* Hero: Total Value + Change Indicator + Risk */}
-            <div className="flex items-end justify-between">
+            <div className="flex flex-col md:flex-row items-start md:items-end justify-between gap-6">
               <div>
-                <p className="text-xs text-zinc-500 uppercase tracking-wider mb-1">Total Portfolio Value</p>
-                <div className="flex items-baseline gap-3">
-                  <p className="text-4xl md:text-5xl font-bold text-zinc-50 tracking-tight">
+                <p className="text-sm text-zinc-500 uppercase tracking-widest mb-1 font-medium">Total Portfolio Value</p>
+                <div className="flex items-baseline gap-4">
+                  <p className="text-4xl md:text-5xl font-light text-zinc-50 tracking-tight">
                     ${totalValue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                   </p>
                   {totalChangeDirection !== 'neutral' && (
-                    <span className={`flex items-center gap-1 text-sm font-semibold ${
-                      totalChangeDirection === 'up' ? 'text-emerald-400' : 'text-red-400'
-                    }`}>
+                    <span className={`flex items-center gap-1 text-base font-light ${totalChangeDirection === 'up' ? 'text-emerald-400' : 'text-red-400'
+                      }`}>
                       <span>{totalChangeDirection === 'up' ? '▲' : '▼'}</span>
                       {totalChangePercent.toFixed(2)}%
                     </span>
                   )}
                 </div>
               </div>
-              <div className="flex items-center gap-2">
-                <span className="text-xs text-zinc-500">Overall Risk:</span>
+              <div className="flex items-center gap-3">
+                <span className="text-sm font-medium text-zinc-500 uppercase tracking-widest">Overall Risk</span>
                 <RiskBadge level={overallLevel} size="lg" />
               </div>
             </div>
 
             {/* AI Sentinel Banner */}
-            <SentinelBanner data={sentinel} loading={sentinelLoading} />
+            <div className="pt-4 pb-4">
+              <SentinelBanner data={sentinel} loading={sentinelLoading} />
+            </div>
 
             {/* Adapter Cards */}
-            <div>
-              <h2 className="text-sm font-semibold text-zinc-400 uppercase tracking-wider mb-3">Protocol Allocations</h2>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="pt-2 space-y-4">
+              <h2 className="text-sm font-medium text-zinc-400 uppercase tracking-widest">Protocol Allocations</h2>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
                 {Object.entries(adapters).map(([name, data]) => (
                   <AdapterCard
                     key={name}
@@ -169,57 +170,57 @@ export default function Home() {
                 ))}
               </div>
               {Object.keys(adapters).length === 0 && (
-                <div className="text-center py-12">
-                  <p className="text-sm text-zinc-600">No adapter data yet. Deposit into ShieldVault to see your portfolio.</p>
+                <div className="text-center py-16">
+                  <p className="text-base font-light text-zinc-500">No adapter data yet. Deposit into ShieldVault to see your portfolio.</p>
                 </div>
               )}
             </div>
 
             {/* DeFi Metrics Summary */}
             {(defiMetrics?.aave || defiMetrics?.compound) && (
-              <div className="bg-zinc-900/60 border border-zinc-800 rounded-2xl p-5">
-                <h3 className="text-sm font-semibold text-zinc-400 uppercase tracking-wider mb-3">Live DeFi Metrics</h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="mt-6 bg-zinc-900/60 border border-zinc-800 rounded-3xl p-6">
+                <h3 className="text-sm font-medium text-zinc-400 uppercase tracking-widest mb-5">Live DeFi Metrics</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   {defiMetrics.aave && (
-                    <div className="p-4 bg-zinc-800/40 rounded-xl">
-                      <div className="flex items-center gap-2 mb-2">
-                        <span>🔵</span>
-                        <span className="text-sm font-semibold text-zinc-200">AAVE V3</span>
+                    <div className="p-5 bg-zinc-800/40 rounded-2xl">
+                      <div className="flex items-center gap-2 mb-4">
+                        <span className="text-xl">🔵</span>
+                        <span className="text-base font-medium text-zinc-200">AAVE V3</span>
                       </div>
-                      <div className="grid grid-cols-3 gap-3 text-center">
-                        <div>
-                          <p className="text-[10px] text-zinc-500 uppercase">Supply APY</p>
-                          <p className="text-sm font-semibold text-emerald-400">{defiMetrics.aave.supplyApy}%</p>
+                      <div className="grid grid-cols-3 gap-4 text-center">
+                        <div className="flex flex-col gap-1">
+                          <span className="text-[10px] text-zinc-500 uppercase tracking-widest">Supply APY</span>
+                          <span className="text-base font-light text-emerald-400">{defiMetrics.aave.supplyApy}%</span>
                         </div>
-                        <div>
-                          <p className="text-[10px] text-zinc-500 uppercase">Borrow APY</p>
-                          <p className="text-sm font-semibold text-orange-400">{defiMetrics.aave.borrowApy}%</p>
+                        <div className="flex flex-col gap-1">
+                          <span className="text-[10px] text-zinc-500 uppercase tracking-widest">Borrow APY</span>
+                          <span className="text-base font-light text-orange-400">{defiMetrics.aave.borrowApy}%</span>
                         </div>
-                        <div>
-                          <p className="text-[10px] text-zinc-500 uppercase">Utilization</p>
-                          <p className="text-sm font-semibold text-zinc-300">{defiMetrics.aave.utilization}%</p>
+                        <div className="flex flex-col gap-1">
+                          <span className="text-[10px] text-zinc-500 uppercase tracking-widest">Utilization</span>
+                          <span className="text-base font-light text-zinc-300">{defiMetrics.aave.utilization}%</span>
                         </div>
                       </div>
                     </div>
                   )}
                   {defiMetrics.compound && (
-                    <div className="p-4 bg-zinc-800/40 rounded-xl">
-                      <div className="flex items-center gap-2 mb-2">
-                        <span>🟢</span>
-                        <span className="text-sm font-semibold text-zinc-200">Compound V3</span>
+                    <div className="p-5 bg-zinc-800/40 rounded-2xl">
+                      <div className="flex items-center gap-2 mb-4">
+                        <span className="text-xl">🟢</span>
+                        <span className="text-base font-medium text-zinc-200">Compound V3</span>
                       </div>
-                      <div className="grid grid-cols-3 gap-3 text-center">
-                        <div>
-                          <p className="text-[10px] text-zinc-500 uppercase">Supply APR</p>
-                          <p className="text-sm font-semibold text-emerald-400">{defiMetrics.compound.supplyApr}%</p>
+                      <div className="grid grid-cols-3 gap-4 text-center">
+                        <div className="flex flex-col gap-1">
+                          <span className="text-[10px] text-zinc-500 uppercase tracking-widest">Supply APR</span>
+                          <span className="text-base font-light text-emerald-400">{defiMetrics.compound.supplyApr}%</span>
                         </div>
-                        <div>
-                          <p className="text-[10px] text-zinc-500 uppercase">Borrow APR</p>
-                          <p className="text-sm font-semibold text-orange-400">{defiMetrics.compound.borrowApr}%</p>
+                        <div className="flex flex-col gap-1">
+                          <span className="text-[10px] text-zinc-500 uppercase tracking-widest">Borrow APR</span>
+                          <span className="text-base font-light text-orange-400">{defiMetrics.compound.borrowApr}%</span>
                         </div>
-                        <div>
-                          <p className="text-[10px] text-zinc-500 uppercase">Utilization</p>
-                          <p className="text-sm font-semibold text-zinc-300">{defiMetrics.compound.utilization}%</p>
+                        <div className="flex flex-col gap-1">
+                          <span className="text-[10px] text-zinc-500 uppercase tracking-widest">Utilization</span>
+                          <span className="text-base font-light text-zinc-300">{defiMetrics.compound.utilization}%</span>
                         </div>
                       </div>
                     </div>

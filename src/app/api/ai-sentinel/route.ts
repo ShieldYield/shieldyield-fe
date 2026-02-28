@@ -52,6 +52,11 @@ interface AiSentinelResponse {
     openIssues: number;
     lastPushDaysAgo: number;
   };
+  sources: {
+    githubUrl: string;
+    cryptoPanicUrl: string;
+  };
+  newsHeadlines: string[];
   timestamp: string;
 }
 
@@ -198,10 +203,10 @@ Guidelines:
       reasoning: String(parsed.reasoning || "Analysis unavailable").slice(0, 300),
       signals: Array.isArray(parsed.signals)
         ? parsed.signals.slice(0, 5).map((s) => ({
-            source: String(s.source || "unknown"),
-            signal: String(s.signal || "").slice(0, 200),
-            sentiment: (["positive", "negative", "neutral"].includes(s.sentiment) ? s.sentiment : "neutral") as "positive" | "negative" | "neutral",
-          }))
+          source: String(s.source || "unknown"),
+          signal: String(s.signal || "").slice(0, 200),
+          sentiment: (["positive", "negative", "neutral"].includes(s.sentiment) ? s.sentiment : "neutral") as "positive" | "negative" | "neutral",
+        }))
         : [],
       recommendation: (["HOLD", "REDUCE", "EXIT"].includes(parsed.recommendation) ? parsed.recommendation : "HOLD") as "HOLD" | "REDUCE" | "EXIT",
     };
@@ -309,6 +314,11 @@ export async function GET(request: NextRequest) {
         openIssues: github.openIssues,
         lastPushDaysAgo: github.lastPushDaysAgo,
       },
+      sources: {
+        githubUrl: config.github || "",
+        cryptoPanicUrl: `https://cryptopanic.com/news/${config.cryptoPanicCurrency}/`,
+      },
+      newsHeadlines,
       timestamp: new Date().toISOString(),
     };
 
