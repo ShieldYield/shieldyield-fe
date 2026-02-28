@@ -100,17 +100,28 @@ async function fetchGitHub(githubUrl: string) {
 }
 
 async function fetchCryptoPanicNews(currency: string): Promise<string[]> {
+  const apiKey = process.env.CRYPTOPANIC_API_KEY;
+
+  if (!apiKey) {
+    console.warn(`[ai-sentinel] No CRYPTOPANIC_API_KEY found. Returning missing key message.`);
+    return ["Please configure CRYPTOPANIC_API_KEY to view real-time news headlines."];
+  }
+
   try {
-    const url = `https://cryptopanic.com/api/free/v1/posts/?currencies=${currency}&kind=news&public=true`;
+    const url = `https://cryptopanic.com/api/developer/v2/posts/?auth_token=${apiKey}&currencies=${currency}&kind=news&public=true`;
     const res = await fetch(url);
-    if (!res.ok) return [];
+    if (!res.ok) {
+      console.error(`[ai-sentinel] CryptoPanic API error: ${res.status}`);
+      return ["Failed to fetch latest news from CryptoPanic."];
+    }
 
     const data = await res.json();
     const posts = data.results || [];
     // Take top 5 headlines
     return posts.slice(0, 5).map((p: { title: string }) => p.title);
-  } catch {
-    return [];
+  } catch (err) {
+    console.error("[ai-sentinel] CryptoPanic fetch failed:", err);
+    return ["Failed to fetch latest news from CryptoPanic."];
   }
 }
 
