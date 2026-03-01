@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import { useAccount } from 'wagmi';
-import { AdapterCard, RiskBadge, SentinelBanner } from '../components/Dashboard';
+import { AdapterCard, RiskBadge, SentinelBanner, VaultActions } from '../components/Dashboard';
 import type { SentinelData } from '../components/Dashboard';
 import { Header } from '../components/Header';
 import { Navbar } from '../components/Navbar';
@@ -25,21 +25,19 @@ export default function Home() {
   const { address: connectedWallet, isConnected } = useAccount();
   const wallet = isConnected ? connectedWallet : null;
 
-  const fetchData = useCallback(async () => {
+  // Fetch portfolio + DeFi metrics (blockchain reads — free, can poll frequently)
+  const fetchPortfolio = useCallback(async () => {
     if (!wallet) {
       setPortfolio(null);
       setDefiMetrics(null);
-      setSentinel(null);
       setLoading(false);
-      setSentinelLoading(false);
       return;
     }
 
     try {
-      const [portRes, metricsRes, sentinelRes] = await Promise.all([
+      const [portRes, metricsRes] = await Promise.all([
         fetch(`/api/portfolio/live?wallet=${wallet}`),
         fetch('/api/defi-metrics'),
-        fetch('/api/ai-sentinel?protocol=AaveAdapter'),
       ]);
 
       if (portRes.ok) {
@@ -50,24 +48,49 @@ export default function Home() {
         const data = await metricsRes.json();
         setDefiMetrics({ aave: data.aave, compound: data.compound });
       }
-      if (sentinelRes.ok) {
-        const data = await sentinelRes.json();
+    } catch (err) {
+      console.error('Failed to fetch portfolio:', err);
+    } finally {
+      setLoading(false);
+    }
+  }, [wallet]);
+
+  // Fetch AI Sentinel data (external APIs — expensive, poll infrequently)
+  const fetchSentinel = useCallback(async () => {
+    if (!wallet) {
+      setSentinel(null);
+      setSentinelLoading(false);
+      return;
+    }
+
+    try {
+      const res = await fetch('/api/ai-sentinel?protocol=AaveAdapter');
+      if (res.ok) {
+        const data = await res.json();
         setSentinel(data);
       }
     } catch (err) {
-      console.error('Failed to fetch data:', err);
+      console.error('Failed to fetch sentinel:', err);
     } finally {
-      setLoading(false);
       setSentinelLoading(false);
     }
   }, [wallet]);
 
+  // Portfolio: poll every 30s (blockchain reads are free)
   useEffect(() => {
     setLoading(true);
-    fetchData();
-    const interval = setInterval(fetchData, 15000);
+    fetchPortfolio();
+    const interval = setInterval(fetchPortfolio, 30_000);
     return () => clearInterval(interval);
-  }, [fetchData]);
+  }, [fetchPortfolio]);
+
+  // Sentinel: poll every 5 minutes (saves CryptoPanic & Groq API credits)
+  useEffect(() => {
+    setSentinelLoading(true);
+    fetchSentinel();
+    const interval = setInterval(fetchSentinel, 5 * 60 * 1000);
+    return () => clearInterval(interval);
+  }, [fetchSentinel]);
 
   useEffect(() => {
     if (!isConnected) {
@@ -148,6 +171,14 @@ export default function Home() {
               <div className="flex items-center gap-3">
                 <span className="text-sm font-medium text-zinc-500 uppercase tracking-widest">Overall Risk</span>
                 <RiskBadge level={overallLevel} size="lg" />
+              </div>
+            </div>
+
+            {/* Vault Actions: Deposit & Withdraw */}
+            <div className="pt-4">
+              <h2 className="text-sm font-medium text-zinc-400 uppercase tracking-widest mb-4">Vault Actions</h2>
+              <div className="max-w-md">
+                <VaultActions onSuccess={fetchPortfolio} />
               </div>
             </div>
 
