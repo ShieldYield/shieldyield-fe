@@ -53,7 +53,7 @@ async function fetchDefiLlamaApys(): Promise<DefiLlamaResult> {
   try {
     const res = await fetch(DEFILLAMA_POOLS_URL, {
       headers: { Accept: "application/json" },
-      next: { revalidate: 30 },
+      cache: "no-store", // disable Next.js native cache because response > 2MB
     });
     if (!res.ok) return empty;
 
@@ -130,13 +130,7 @@ async function fetchDefiLlamaApys(): Promise<DefiLlamaResult> {
 const SHIELD_VAULT = "0xcFBd47c63D284A8F824e586596Df4d5c57326c8B" as const;
 const RISK_REGISTRY = "0xa23BE1297F836FF7D4E3297320ff16dbc7903e6D" as const;
 
-const ADAPTERS: Record<string, Address> = {
-  AaveAdapter: "0xB81961aA49d7E834404e299e688B3Dc09a5EFe5a",
-  CompoundAdapter: "0xcc547a2B0f18b34095623809977D54cfe306BEBF",
-  MorphoAdapter: "0x5f8A64Bc67f23b8d5d02c7CFE187AD42D59f1D59",
-  YieldMaxAdapter: "0x5EbD6F3DA76C2B9C9d6aAC89DA08c388EaB2B3cb",
-};
-
+// We no longer hardcode ADAPTERS here, we fetch them dynamically from ShieldVault!
 // ============================================================================
 // Minimal ABIs
 // ============================================================================
@@ -195,6 +189,13 @@ const SHIELD_VAULT_ABI = [
 ] as const;
 
 const ADAPTER_ABI = [
+  {
+    name: "name",
+    type: "function",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ name: "", type: "string" }],
+  },
   {
     name: "getBalance",
     type: "function",
@@ -303,9 +304,7 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const adapterEntries = Object.entries(ADAPTERS);
-
-    // Batch 1: User balance, user position, pool allocations, total assets
+    // Phase 1: Fetch active pool allocations and general vault data
     const vaultCalls = [
       {
         address: SHIELD_VAULT,
@@ -331,8 +330,27 @@ export async function GET(request: NextRequest) {
       },
     ];
 
-    // Batch 2: Per-adapter reads (getBalance, getCurrentAPY, isHealthy) + risk scores
-    const adapterCalls = adapterEntries.flatMap(([, addr]) => [
+    const vaultResults = await client.multicall({ contracts: vaultCalls });
+
+    // Parse vault results
+    const userBalance = vaultResults[0].status === "success" ? (vaultResults[0].result as bigint) : 0n;
+    const userPosition = vaultResults[1].status === "success"
+      ? (vaultResults[1].result as { totalDeposited: bigint; totalShares: bigint; lastDepositTime: bigint })
+      : null;
+    const poolAllocations = vaultResults[2].status === "success"
+      ? (vaultResults[2].result as ReadonlyArray<{ adapter: Address; tier: number; targetWeight: bigint; currentAmount: bigint; isActive: boolean }>)
+      : [];
+    const totalAssets = vaultResults[3].status === "success" ? (vaultResults[3].result as bigint) : 0n;
+
+    // Filter only active pools and build the adapter list dynamically
+    const activeAdapters = poolAllocations.filter((p) => p.isActive).map(p => p.adapter);
+
+    // Total balance in USDC (6 decimals)
+    const totalValueUsd = Number(formatUnits(userBalance, 6));
+
+    // Phase 2: Fetch adapter specific details (balance, APY, health, name, risk) & DeFiLlama  
+    const adapterCalls = activeAdapters.flatMap((addr) => [
+      { address: addr, abi: ADAPTER_ABI, functionName: "name" as const },
       { address: addr, abi: ADAPTER_ABI, functionName: "getBalance" as const },
       { address: addr, abi: ADAPTER_ABI, functionName: "getCurrentAPY" as const },
       { address: addr, abi: ADAPTER_ABI, functionName: "isHealthy" as const },
@@ -344,26 +362,13 @@ export async function GET(request: NextRequest) {
       },
     ]);
 
-    const [vaultResults, adapterResults, defiLlama] = await Promise.all([
-      client.multicall({ contracts: vaultCalls }),
+    const [adapterResults, defiLlama] = await Promise.all([
       client.multicall({ contracts: adapterCalls }),
       fetchDefiLlamaApys(),
     ]);
+
     const defiLlamaApys = defiLlama.apys;
     const yieldMaxTopPools = defiLlama.yieldMaxTopPools;
-
-    // Parse vault results
-    const userBalance =
-      vaultResults[0].status === "success" ? (vaultResults[0].result as bigint) : 0n;
-    const userPosition =
-      vaultResults[1].status === "success"
-        ? (vaultResults[1].result as { totalDeposited: bigint; totalShares: bigint; lastDepositTime: bigint })
-        : null;
-    const totalAssets =
-      vaultResults[3].status === "success" ? (vaultResults[3].result as bigint) : 0n;
-
-    // Total balance in USDC (6 decimals)
-    const totalValueUsd = Number(formatUnits(userBalance, 6));
 
     // Parse per-adapter results
     const adapters: Record<string, unknown> = {};
@@ -371,44 +376,53 @@ export async function GET(request: NextRequest) {
     let totalAdapterBalance = 0n;
 
     // Pre-calculate total adapter balance for allocation percentages
-    for (let i = 0; i < adapterEntries.length; i++) {
-      const baseIdx = i * 4;
+    for (let i = 0; i < activeAdapters.length; i++) {
+      const baseIdx = i * 5;
       const balance =
-        adapterResults[baseIdx].status === "success"
-          ? (adapterResults[baseIdx].result as bigint)
+        adapterResults[baseIdx + 1].status === "success"
+          ? (adapterResults[baseIdx + 1].result as bigint)
           : 0n;
       totalAdapterBalance += balance;
     }
 
-    for (let i = 0; i < adapterEntries.length; i++) {
-      const [name, addr] = adapterEntries[i];
-      const baseIdx = i * 4;
+    for (let i = 0; i < activeAdapters.length; i++) {
+      const addr = activeAdapters[i];
+      const baseIdx = i * 5;
+
+      const nameObj = adapterResults[baseIdx];
+      // Fallback formatting: if the contract doesn't return a name, fallback to short address
+      const contractRealName = nameObj.status === "success" && typeof nameObj.result === "string"
+        ? nameObj.result
+        : `Adapter_${addr.slice(0, 6)}`;
+
+      // Ensure the name ends with "Adapter" for standardizing icons on frontend
+      const name = contractRealName.endsWith("Adapter") ? contractRealName : `${contractRealName}Adapter`;
 
       const balance =
-        adapterResults[baseIdx].status === "success"
-          ? (adapterResults[baseIdx].result as bigint)
-          : 0n;
-      const apyBps =
         adapterResults[baseIdx + 1].status === "success"
           ? (adapterResults[baseIdx + 1].result as bigint)
           : 0n;
-      const healthy =
+      const apyBps =
         adapterResults[baseIdx + 2].status === "success"
-          ? (adapterResults[baseIdx + 2].result as boolean)
+          ? (adapterResults[baseIdx + 2].result as bigint)
+          : 0n;
+      const healthy =
+        adapterResults[baseIdx + 3].status === "success"
+          ? (adapterResults[baseIdx + 3].result as boolean)
           : true;
       const riskData =
-        adapterResults[baseIdx + 3].status === "success"
-          ? (adapterResults[baseIdx + 3].result as {
-              riskScore: number;
-              threatLevel: number;
-              lastUpdated: bigint;
-              isActive: boolean;
-            })
+        adapterResults[baseIdx + 4].status === "success"
+          ? (adapterResults[baseIdx + 4].result as {
+            riskScore: number;
+            threatLevel: number;
+            lastUpdated: bigint;
+            isActive: boolean;
+          })
           : null;
 
       const balanceUsd = Number(formatUnits(balance, 6));
       const principalUsd = userPosition
-        ? Number(formatUnits(userPosition.totalDeposited, 6)) / adapterEntries.length
+        ? Number(formatUnits(userPosition.totalDeposited, 6)) / activeAdapters.length
         : 0;
       const allocation =
         totalAdapterBalance > 0n

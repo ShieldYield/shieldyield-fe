@@ -1,7 +1,7 @@
 'use client';
 
 import NavbarContent from './NavbarItem';
-import { VscHome, VscShield, VscPulse } from 'react-icons/vsc';
+import { VscHome, VscShield, VscPulse, VscSettingsGear } from 'react-icons/vsc';
 import { useRouter } from 'next/navigation';
 
 export default function Navbar() {
@@ -11,6 +11,7 @@ export default function Navbar() {
         { icon: <VscHome size={20} />, label: 'Home', onClick: () => router.push('/') },
         { icon: <VscShield size={20} />, label: 'Protocol', onClick: () => router.push('/protocol') },
         { icon: <VscPulse size={20} />, label: 'Activity', onClick: () => alert('Activity — coming soon!') },
+        { icon: <VscSettingsGear size={20} />, label: 'Admin', onClick: () => router.push('/admin') },
     ];
 
     return (

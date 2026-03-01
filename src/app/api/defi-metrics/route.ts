@@ -178,7 +178,7 @@ export async function GET() {
     try {
         const res = await fetch(DEFILLAMA_POOLS_URL, {
             headers: { Accept: "application/json" },
-            next: { revalidate: 30 },
+            cache: "no-store", // disable Next.js native cache because response > 2MB
         });
         if (!res.ok) {
             throw new Error(`DeFiLlama responded with ${res.status}`);
