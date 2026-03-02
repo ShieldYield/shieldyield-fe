@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { useAccount } from 'wagmi';
 import { AdapterCard, RiskBadge, SentinelBanner, VaultActions, LiveYieldTicker, FundFlowDiagram } from '../components/Dashboard';
 import type { SentinelData } from '../components/Dashboard';
@@ -106,6 +106,36 @@ export default function Home() {
   const totalChangePercent = portfolio?.totalChangePercent ?? 0;
   const totalChangeDirection = portfolio?.totalChangeDirection ?? 'neutral';
 
+  // ── Live total value interpolation ──
+  const [liveTotal, setLiveTotal] = useState(totalValue);
+  const baseTotalRef = useRef(totalValue);
+  const lastPollRef = useRef(Date.now());
+
+  // Compute weighted APY for interpolation
+  const adapterEntries = Object.values(adapters) as any[];
+  const totalBal = adapterEntries.reduce((s: number, a: any) => s + (a.balance || 0), 0);
+  const weightedApy = totalBal > 0
+    ? adapterEntries.reduce((s: number, a: any) => s + (a.balance || 0) * (a.apy || 0), 0) / totalBal
+    : 0;
+  const yieldPerSecond = (totalBal * (weightedApy / 100)) / 31_536_000;
+
+  // Sync on new poll data
+  useEffect(() => {
+    baseTotalRef.current = totalValue;
+    lastPollRef.current = Date.now();
+    setLiveTotal(totalValue);
+  }, [totalValue]);
+
+  // Tick every 100ms
+  useEffect(() => {
+    if (yieldPerSecond <= 0) return;
+    const interval = setInterval(() => {
+      const elapsed = (Date.now() - lastPollRef.current) / 1000;
+      setLiveTotal(baseTotalRef.current + elapsed * yieldPerSecond);
+    }, 100);
+    return () => clearInterval(interval);
+  }, [yieldPerSecond]);
+
   const overallLevel = Object.values(riskScores).reduce(
     (worst: string, r: any) => {
       const order = ['SAFE', 'WATCH', 'WARNING', 'CRITICAL'];
@@ -166,7 +196,7 @@ export default function Home() {
                 </div>
                 <div className="flex items-baseline gap-4">
                   <p className="text-4xl md:text-5xl font-light text-zinc-50 tracking-tight font-mono tabular-nums">
-                    ${totalValue.toLocaleString('en-US', { minimumFractionDigits: 6, maximumFractionDigits: 6 })}
+                    ${liveTotal.toLocaleString('en-US', { minimumFractionDigits: 6, maximumFractionDigits: 6 })}
                   </p>
                   {totalChangeDirection !== 'neutral' && (
                     <span className={`flex items-center gap-1 text-base font-light ${totalChangeDirection === 'up' ? 'text-emerald-400' : 'text-red-400'
@@ -193,11 +223,6 @@ export default function Home() {
 
             {/* Live Yield Ticker */}
             {Object.keys(adapters).length > 0 && (() => {
-              const adapterEntries = Object.values(adapters) as any[];
-              const totalBal = adapterEntries.reduce((sum: number, a: any) => sum + (a.balance || 0), 0);
-              const weightedApy = totalBal > 0
-                ? adapterEntries.reduce((sum: number, a: any) => sum + (a.balance || 0) * (a.apy || 0), 0) / totalBal
-                : 0;
               const totalYield = adapterEntries.reduce((sum: number, a: any) => sum + (a.accruedYield || 0), 0);
               return (
                 <LiveYieldTicker totalBalance={totalBal} weightedApy={weightedApy} totalAccruedYield={totalYield} />
