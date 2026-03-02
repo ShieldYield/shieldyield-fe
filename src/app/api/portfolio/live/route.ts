@@ -322,200 +322,200 @@ export async function GET(request: NextRequest) {
           headers: { "X-Cache": "SIM", "X-Simulation": "true" },
         });
       }
+    }
+  } catch { /* simulation file not present or invalid — continue with real data */ }
 
-    } catch { /* simulation file not present or invalid — continue with real data */ }
+  // Check cache
+  if (cache && cache.wallet === walletLower && Date.now() - cache.timestamp < CACHE_TTL_MS) {
+    return NextResponse.json(cache.data, { headers: { "X-Cache": "HIT" } });
+  }
 
-    // Check cache
-    if (cache && cache.wallet === walletLower && Date.now() - cache.timestamp < CACHE_TTL_MS) {
-      return NextResponse.json(cache.data, { headers: { "X-Cache": "HIT" } });
+  try {
+    // Phase 1: Fetch active pool allocations and general vault data
+    const vaultCalls = [
+      {
+        address: SHIELD_VAULT,
+        abi: SHIELD_VAULT_ABI,
+        functionName: "getUserBalance" as const,
+        args: [wallet as Address],
+      },
+      {
+        address: SHIELD_VAULT,
+        abi: SHIELD_VAULT_ABI,
+        functionName: "getUserPosition" as const,
+        args: [wallet as Address],
+      },
+      {
+        address: SHIELD_VAULT,
+        abi: SHIELD_VAULT_ABI,
+        functionName: "getPoolAllocations" as const,
+      },
+      {
+        address: SHIELD_VAULT,
+        abi: SHIELD_VAULT_ABI,
+        functionName: "getTotalAssets" as const,
+      },
+    ];
+
+    const vaultResults = await client.multicall({ contracts: vaultCalls });
+
+    // Parse vault results
+    const userBalance = vaultResults[0].status === "success" ? (vaultResults[0].result as bigint) : 0n;
+    const userPosition = vaultResults[1].status === "success"
+      ? (vaultResults[1].result as { totalDeposited: bigint; totalShares: bigint; lastDepositTime: bigint })
+      : null;
+    const poolAllocations = vaultResults[2].status === "success"
+      ? (vaultResults[2].result as ReadonlyArray<{ adapter: Address; tier: number; targetWeight: bigint; currentAmount: bigint; isActive: boolean }>)
+      : [];
+    const totalAssets = vaultResults[3].status === "success" ? (vaultResults[3].result as bigint) : 0n;
+
+    // Filter only active pools and build the adapter list dynamically
+    const activeAdapters = poolAllocations.filter((p) => p.isActive).map(p => p.adapter);
+
+    // Total balance in USDC (6 decimals)
+    const totalValueUsd = Number(formatUnits(userBalance, 6));
+
+    // Phase 2: Fetch adapter specific details (balance, APY, health, name, risk) & DeFiLlama  
+    const adapterCalls = activeAdapters.flatMap((addr) => [
+      { address: addr, abi: ADAPTER_ABI, functionName: "name" as const },
+      { address: addr, abi: ADAPTER_ABI, functionName: "getBalance" as const },
+      { address: addr, abi: ADAPTER_ABI, functionName: "getCurrentAPY" as const },
+      { address: addr, abi: ADAPTER_ABI, functionName: "isHealthy" as const },
+      {
+        address: RISK_REGISTRY as Address,
+        abi: RISK_REGISTRY_ABI,
+        functionName: "getProtocolRisk" as const,
+        args: [addr],
+      },
+    ]);
+
+    const [adapterResults, defiLlama] = await Promise.all([
+      client.multicall({ contracts: adapterCalls }),
+      fetchDefiLlamaApys(),
+    ]);
+
+    const defiLlamaApys = defiLlama.apys;
+    const yieldMaxTopPools = defiLlama.yieldMaxTopPools;
+
+    // Parse per-adapter results
+    const adapters: Record<string, unknown> = {};
+    const riskScores: Record<string, unknown> = {};
+    let totalAdapterBalance = 0n;
+
+    // Pre-calculate total adapter balance for allocation percentages
+    for (let i = 0; i < activeAdapters.length; i++) {
+      const baseIdx = i * 5;
+      const balance =
+        adapterResults[baseIdx + 1].status === "success"
+          ? (adapterResults[baseIdx + 1].result as bigint)
+          : 0n;
+      totalAdapterBalance += balance;
     }
 
-    try {
-      // Phase 1: Fetch active pool allocations and general vault data
-      const vaultCalls = [
-        {
-          address: SHIELD_VAULT,
-          abi: SHIELD_VAULT_ABI,
-          functionName: "getUserBalance" as const,
-          args: [wallet as Address],
-        },
-        {
-          address: SHIELD_VAULT,
-          abi: SHIELD_VAULT_ABI,
-          functionName: "getUserPosition" as const,
-          args: [wallet as Address],
-        },
-        {
-          address: SHIELD_VAULT,
-          abi: SHIELD_VAULT_ABI,
-          functionName: "getPoolAllocations" as const,
-        },
-        {
-          address: SHIELD_VAULT,
-          abi: SHIELD_VAULT_ABI,
-          functionName: "getTotalAssets" as const,
-        },
-      ];
+    for (let i = 0; i < activeAdapters.length; i++) {
+      const addr = activeAdapters[i];
+      const baseIdx = i * 5;
 
-      const vaultResults = await client.multicall({ contracts: vaultCalls });
+      const nameObj = adapterResults[baseIdx];
+      // Fallback formatting: if the contract doesn't return a name, fallback to short address
+      const contractRealName = nameObj.status === "success" && typeof nameObj.result === "string"
+        ? nameObj.result
+        : `Adapter_${addr.slice(0, 6)}`;
 
-      // Parse vault results
-      const userBalance = vaultResults[0].status === "success" ? (vaultResults[0].result as bigint) : 0n;
-      const userPosition = vaultResults[1].status === "success"
-        ? (vaultResults[1].result as { totalDeposited: bigint; totalShares: bigint; lastDepositTime: bigint })
-        : null;
-      const poolAllocations = vaultResults[2].status === "success"
-        ? (vaultResults[2].result as ReadonlyArray<{ adapter: Address; tier: number; targetWeight: bigint; currentAmount: bigint; isActive: boolean }>)
-        : [];
-      const totalAssets = vaultResults[3].status === "success" ? (vaultResults[3].result as bigint) : 0n;
+      // Ensure the name ends with "Adapter" for standardizing icons on frontend
+      const name = contractRealName.endsWith("Adapter") ? contractRealName : `${contractRealName}Adapter`;
 
-      // Filter only active pools and build the adapter list dynamically
-      const activeAdapters = poolAllocations.filter((p) => p.isActive).map(p => p.adapter);
+      const balance =
+        adapterResults[baseIdx + 1].status === "success"
+          ? (adapterResults[baseIdx + 1].result as bigint)
+          : 0n;
+      const apyBps =
+        adapterResults[baseIdx + 2].status === "success"
+          ? (adapterResults[baseIdx + 2].result as bigint)
+          : 0n;
+      const healthy =
+        adapterResults[baseIdx + 3].status === "success"
+          ? (adapterResults[baseIdx + 3].result as boolean)
+          : true;
+      const riskData =
+        adapterResults[baseIdx + 4].status === "success"
+          ? (adapterResults[baseIdx + 4].result as {
+            riskScore: number;
+            threatLevel: number;
+            lastUpdated: bigint;
+            isActive: boolean;
+          })
+          : null;
 
-      // Total balance in USDC (6 decimals)
-      const totalValueUsd = Number(formatUnits(userBalance, 6));
-
-      // Phase 2: Fetch adapter specific details (balance, APY, health, name, risk) & DeFiLlama  
-      const adapterCalls = activeAdapters.flatMap((addr) => [
-        { address: addr, abi: ADAPTER_ABI, functionName: "name" as const },
-        { address: addr, abi: ADAPTER_ABI, functionName: "getBalance" as const },
-        { address: addr, abi: ADAPTER_ABI, functionName: "getCurrentAPY" as const },
-        { address: addr, abi: ADAPTER_ABI, functionName: "isHealthy" as const },
-        {
-          address: RISK_REGISTRY as Address,
-          abi: RISK_REGISTRY_ABI,
-          functionName: "getProtocolRisk" as const,
-          args: [addr],
-        },
-      ]);
-
-      const [adapterResults, defiLlama] = await Promise.all([
-        client.multicall({ contracts: adapterCalls }),
-        fetchDefiLlamaApys(),
-      ]);
-
-      const defiLlamaApys = defiLlama.apys;
-      const yieldMaxTopPools = defiLlama.yieldMaxTopPools;
-
-      // Parse per-adapter results
-      const adapters: Record<string, unknown> = {};
-      const riskScores: Record<string, unknown> = {};
-      let totalAdapterBalance = 0n;
-
-      // Pre-calculate total adapter balance for allocation percentages
-      for (let i = 0; i < activeAdapters.length; i++) {
-        const baseIdx = i * 5;
-        const balance =
-          adapterResults[baseIdx + 1].status === "success"
-            ? (adapterResults[baseIdx + 1].result as bigint)
-            : 0n;
-        totalAdapterBalance += balance;
-      }
-
-      for (let i = 0; i < activeAdapters.length; i++) {
-        const addr = activeAdapters[i];
-        const baseIdx = i * 5;
-
-        const nameObj = adapterResults[baseIdx];
-        // Fallback formatting: if the contract doesn't return a name, fallback to short address
-        const contractRealName = nameObj.status === "success" && typeof nameObj.result === "string"
-          ? nameObj.result
-          : `Adapter_${addr.slice(0, 6)}`;
-
-        // Ensure the name ends with "Adapter" for standardizing icons on frontend
-        const name = contractRealName.endsWith("Adapter") ? contractRealName : `${contractRealName}Adapter`;
-
-        const balance =
-          adapterResults[baseIdx + 1].status === "success"
-            ? (adapterResults[baseIdx + 1].result as bigint)
-            : 0n;
-        const apyBps =
-          adapterResults[baseIdx + 2].status === "success"
-            ? (adapterResults[baseIdx + 2].result as bigint)
-            : 0n;
-        const healthy =
-          adapterResults[baseIdx + 3].status === "success"
-            ? (adapterResults[baseIdx + 3].result as boolean)
-            : true;
-        const riskData =
-          adapterResults[baseIdx + 4].status === "success"
-            ? (adapterResults[baseIdx + 4].result as {
-              riskScore: number;
-              threatLevel: number;
-              lastUpdated: bigint;
-              isActive: boolean;
-            })
-            : null;
-
-        const balanceUsd = Number(formatUnits(balance, 6));
-        const principalUsd = userPosition
-          ? Number(formatUnits(userPosition.totalDeposited, 6)) / activeAdapters.length
+      const balanceUsd = Number(formatUnits(balance, 6));
+      const principalUsd = userPosition
+        ? Number(formatUnits(userPosition.totalDeposited, 6)) / activeAdapters.length
+        : 0;
+      const allocation =
+        totalAdapterBalance > 0n
+          ? Number((balance * 10000n) / totalAdapterBalance) / 100
           : 0;
-        const allocation =
-          totalAdapterBalance > 0n
-            ? Number((balance * 10000n) / totalAdapterBalance) / 100
-            : 0;
 
-        const prevBalance = previousBalances.get(name) ?? 0;
-        const adapterChange = calcChange(balanceUsd, prevBalance);
+      const prevBalance = previousBalances.get(name) ?? 0;
+      const adapterChange = calcChange(balanceUsd, prevBalance);
 
-        // Use DeFiLlama APY if available, fallback to on-chain value
-        const onChainApy = Number(apyBps) / 100;
-        const apy = defiLlamaApys[name] ?? onChainApy;
+      // Use DeFiLlama APY if available, fallback to on-chain value
+      const onChainApy = Number(apyBps) / 100;
+      const apy = defiLlamaApys[name] ?? onChainApy;
 
-        adapters[name] = {
-          address: addr,
-          balance: balanceUsd,
-          apy,
-          isHealthy: healthy,
-          principal: principalUsd,
-          accruedYield: Math.max(0, balanceUsd - principalUsd),
-          allocation,
-          changePercent: adapterChange.changePercent,
-          changeDirection: adapterChange.changeDirection,
-          ...(name === "YieldMaxAdapter" && yieldMaxTopPools.length > 0
-            ? { topPools: yieldMaxTopPools }
-            : {}),
-        };
-
-        // Update global previous balance for next comparison
-        previousBalances.set(name, balanceUsd);
-
-        if (riskData) {
-          riskScores[name] = {
-            score: riskData.riskScore,
-            level: THREAT_LEVELS[riskData.threatLevel] || "SAFE",
-          };
-        }
-      }
-
-      const totalChange = calcChange(totalValueUsd, previousTotalValue);
-      previousTotalValue = totalValueUsd;
-
-      const responseData = {
-        totalValueUsd,
-        totalChangePercent: totalChange.changePercent,
-        totalChangeDirection: totalChange.changeDirection,
-        adapters,
-        riskScores,
-        totalAssets: Number(formatUnits(totalAssets, 6)),
-        lastUpdated: new Date().toISOString(),
+      adapters[name] = {
+        address: addr,
+        balance: balanceUsd,
+        apy,
+        isHealthy: healthy,
+        principal: principalUsd,
+        accruedYield: Math.max(0, balanceUsd - principalUsd),
+        allocation,
+        changePercent: adapterChange.changePercent,
+        changeDirection: adapterChange.changeDirection,
+        ...(name === "YieldMaxAdapter" && yieldMaxTopPools.length > 0
+          ? { topPools: yieldMaxTopPools }
+          : {}),
       };
 
-      // Cache
-      cache = { data: responseData, timestamp: Date.now(), wallet: walletLower };
+      // Update global previous balance for next comparison
+      previousBalances.set(name, balanceUsd);
 
-      return NextResponse.json(responseData, {
-        headers: {
-          "X-Cache": "MISS",
-          "Cache-Control": "public, max-age=15",
-        },
-      });
-    } catch (err: unknown) {
-      console.error("[portfolio/live] Error:", err);
-      return NextResponse.json(
-        { error: "Failed to fetch portfolio data", details: String(err) },
-        { status: 500 }
-      );
+      if (riskData) {
+        riskScores[name] = {
+          score: riskData.riskScore,
+          level: THREAT_LEVELS[riskData.threatLevel] || "SAFE",
+        };
+      }
     }
-  }
+
+    const totalChange = calcChange(totalValueUsd, previousTotalValue);
+    previousTotalValue = totalValueUsd;
+
+    const responseData = {
+      totalValueUsd,
+      totalChangePercent: totalChange.changePercent,
+      totalChangeDirection: totalChange.changeDirection,
+      adapters,
+      riskScores,
+      totalAssets: Number(formatUnits(totalAssets, 6)),
+      lastUpdated: new Date().toISOString(),
+    };
+
+    // Cache
+    cache = { data: responseData, timestamp: Date.now(), wallet: walletLower };
+
+    return NextResponse.json(responseData, {
+      headers: {
+        "X-Cache": "MISS",
+        "Cache-Control": "public, max-age=15",
+      },
+    });
+  } catch (err: unknown) {
+    console.error("[portfolio/live] Error:", err);
+    return NextResponse.json(
+      { error: "Failed to fetch portfolio data", details: String(err) },
+      { status: 500 }
+    );
+  };
+}
