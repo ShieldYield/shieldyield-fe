@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import { useAccount } from 'wagmi';
-import { AdapterCard, RiskBadge, SentinelBanner, VaultActions } from '../components/Dashboard';
+import { AdapterCard, RiskBadge, SentinelBanner, VaultActions, LiveYieldTicker, FundFlowDiagram } from '../components/Dashboard';
 import type { SentinelData } from '../components/Dashboard';
 import { Header } from '../components/Header';
 import { Navbar } from '../components/Navbar';
@@ -80,7 +80,7 @@ export default function Home() {
   useEffect(() => {
     setLoading(true);
     fetchPortfolio();
-    const interval = setInterval(fetchPortfolio, 30_000);
+    const interval = setInterval(fetchPortfolio, 10_000);
     return () => clearInterval(interval);
   }, [fetchPortfolio]);
 
@@ -154,16 +154,25 @@ export default function Home() {
             {/* Hero: Total Value + Change Indicator + Risk */}
             <div className="flex flex-col md:flex-row items-start md:items-end justify-between gap-6">
               <div>
-                <p className="text-sm text-zinc-500 uppercase tracking-widest mb-1 font-medium">Total Portfolio Value</p>
+                <div className="flex items-center gap-2 mb-1">
+                  <p className="text-sm text-zinc-500 uppercase tracking-widest font-medium">Total Portfolio Value</p>
+                  <div className="flex items-center gap-1.5">
+                    <span className="relative flex h-2 w-2">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+                      <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-400" />
+                    </span>
+                    <span className="text-[10px] text-emerald-500 font-medium uppercase tracking-widest">Live</span>
+                  </div>
+                </div>
                 <div className="flex items-baseline gap-4">
-                  <p className="text-4xl md:text-5xl font-light text-zinc-50 tracking-tight">
-                    ${totalValue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  <p className="text-4xl md:text-5xl font-light text-zinc-50 tracking-tight font-mono tabular-nums">
+                    ${totalValue.toLocaleString('en-US', { minimumFractionDigits: 6, maximumFractionDigits: 6 })}
                   </p>
                   {totalChangeDirection !== 'neutral' && (
                     <span className={`flex items-center gap-1 text-base font-light ${totalChangeDirection === 'up' ? 'text-emerald-400' : 'text-red-400'
                       }`}>
                       <span>{totalChangeDirection === 'up' ? '▲' : '▼'}</span>
-                      {totalChangePercent.toFixed(2)}%
+                      {totalChangePercent.toFixed(4)}%
                     </span>
                   )}
                 </div>
@@ -181,6 +190,35 @@ export default function Home() {
                 <VaultActions onSuccess={fetchPortfolio} />
               </div>
             </div>
+
+            {/* Live Yield Ticker */}
+            {Object.keys(adapters).length > 0 && (() => {
+              const adapterEntries = Object.values(adapters) as any[];
+              const totalBal = adapterEntries.reduce((sum: number, a: any) => sum + (a.balance || 0), 0);
+              const weightedApy = totalBal > 0
+                ? adapterEntries.reduce((sum: number, a: any) => sum + (a.balance || 0) * (a.apy || 0), 0) / totalBal
+                : 0;
+              const totalYield = adapterEntries.reduce((sum: number, a: any) => sum + (a.accruedYield || 0), 0);
+              return (
+                <LiveYieldTicker totalBalance={totalBal} weightedApy={weightedApy} totalAccruedYield={totalYield} />
+              );
+            })()}
+
+            {/* Fund Flow Diagram */}
+            {Object.keys(adapters).length > 0 && (
+              <FundFlowDiagram
+                totalValue={totalValue}
+                adapters={Object.entries(adapters).map(([name, data]: [string, any]) => ({
+                  name,
+                  balance: data.balance || 0,
+                  apy: data.apy || 0,
+                  allocation: data.allocation || 0,
+                  riskScore: riskScores[name]?.score,
+                  riskLevel: riskScores[name]?.level,
+                  isHealthy: data.isHealthy !== false,
+                }))}
+              />
+            )}
 
             {/* AI Sentinel Banner */}
             <div className="pt-4 pb-4">

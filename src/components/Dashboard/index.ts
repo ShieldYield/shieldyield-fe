@@ -6,5 +6,6 @@ export { default as ActivityFeed } from './ActivityFeed';
 export { default as SentinelBanner } from './SentinelBanner';
 export { default as AiTransparencyPanel } from './AiTransparencyPanel';
 export { default as VaultActions } from './VaultActions';
+export { default as LiveYieldTicker } from './LiveYieldTicker';
+export { default as FundFlowDiagram } from './FundFlowDiagram';
 export type { SentinelData } from './SentinelBanner';
-

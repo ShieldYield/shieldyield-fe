@@ -52,20 +52,27 @@ export default function AdapterCard({ name, data, riskScore }: AdapterCardProps)
                 {/* Balance + Change Indicator */}
                 <div className="mb-5">
                     <div className="flex items-baseline gap-2">
-                        <p className="text-3xl font-light text-zinc-50 tracking-tight">
-                            ${data.balance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        <p className="text-3xl font-light text-zinc-50 tracking-tight font-mono tabular-nums">
+                            ${data.balance.toLocaleString('en-US', { minimumFractionDigits: 6, maximumFractionDigits: 6 })}
                         </p>
                         {data.changeDirection && data.changeDirection !== 'neutral' && (
                             <span className={`flex items-center gap-1 text-xs font-light ${data.changeDirection === 'up' ? 'text-emerald-400' : 'text-red-400'
                                 }`}>
                                 <span>{data.changeDirection === 'up' ? '▲' : '▼'}</span>
-                                {(data.changePercent ?? 0).toFixed(2)}%
+                                {(data.changePercent ?? 0).toFixed(4)}%
                             </span>
                         )}
                     </div>
-                    <p className="text-xs font-light text-zinc-500 mt-1">
-                        Principal: ${data.principal.toLocaleString('en-US', { minimumFractionDigits: 2 })}
-                    </p>
+                    <div className="flex items-center justify-between mt-1">
+                        <p className="text-xs font-light text-zinc-500">
+                            Principal: ${data.principal.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                        </p>
+                        {data.apy > 0 && data.balance > 0 && (
+                            <span className="text-[10px] font-mono text-emerald-500/70">
+                                +${((data.balance * (data.apy / 100)) / 31_536_000).toFixed(8)}/s
+                            </span>
+                        )}
+                    </div>
                 </div>
 
                 {/* Stats row */}

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createPublicClient, http, formatUnits, type Address } from "viem";
 import { arbitrumSepolia } from "viem/chains";
+import * as fs from "fs";
 
 // ============================================================================
 // DeFiLlama APY Integration
@@ -297,6 +298,32 @@ export async function GET(request: NextRequest) {
   }
 
   const walletLower = wallet.toLowerCase();
+
+  // ── SIMULATION MODE: If CLI demo script is running, serve its state ──
+  const SIM_FILE = "/tmp/shieldyield-simulation.json";
+  try {
+    if (fs.existsSync(SIM_FILE)) {
+      const raw = fs.readFileSync(SIM_FILE, "utf-8");
+      const simState = JSON.parse(raw);
+      if (simState.active) {
+        console.log(`[portfolio/live] 🎬 SIMULATION MODE — step ${simState.step}: ${simState.stepLabel}`);
+        return NextResponse.json({
+          totalValueUsd: simState.totalValueUsd,
+          totalChangePercent: simState.totalChangePercent ?? 0,
+          totalChangeDirection: simState.totalChangeDirection ?? "neutral",
+          adapters: simState.adapters,
+          riskScores: simState.riskScores,
+          totalAssets: simState.totalAssets ?? simState.totalValueUsd,
+          lastUpdated: simState.lastUpdated,
+          simulation: true,
+          simulationStep: simState.step,
+          simulationLabel: simState.stepLabel,
+        }, {
+          headers: { "X-Cache": "SIM", "X-Simulation": "true" },
+        });
+      }
+    }
+  } catch { /* simulation file not present or invalid — continue with real data */ }
 
   // Check cache
   if (cache && cache.wallet === walletLower && Date.now() - cache.timestamp < CACHE_TTL_MS) {
