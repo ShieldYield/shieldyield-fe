@@ -517,5 +517,5 @@ export async function GET(request: NextRequest) {
       { error: "Failed to fetch portfolio data", details: String(err) },
       { status: 500 }
     );
-  };
+  }
 }
