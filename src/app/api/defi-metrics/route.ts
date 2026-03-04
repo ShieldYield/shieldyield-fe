@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 
 // ============================================================================
 // DeFiLlama Yields API
@@ -155,10 +155,80 @@ function findPool(
 }
 
 // ============================================================================
+// Simulation mock data (realistis tapi statis — tidak memanggil DeFiLlama)
+// ============================================================================
+
+const SIM_DEFI_METRICS = {
+    timestamp: 0, // diisi saat request
+    chain:     "arbitrum",
+    source:    "simulation",
+    aave: {
+        totalSupplied: "15234567.00",
+        totalBorrowed: "10668197.00",
+        supplyApy:     4.52,
+        borrowApy:     6.21,
+        utilization:   70.0,
+    },
+    compound: {
+        totalSupply: "8456789.00",
+        totalBorrow: "5498913.00",
+        utilization: 65.0,
+        supplyApr:   3.87,
+        borrowApr:   5.43,
+    },
+    safeHaven: {
+        chain: "base",
+        aave: {
+            totalSupplied: "9123456.00",
+            totalBorrowed: "5746978.00",
+            supplyApy:     4.11,
+            borrowApy:     5.89,
+            utilization:   63.0,
+        },
+        compound: null,
+    },
+    _sim: true,
+};
+
+// ============================================================================
 // API Route Handler
 // ============================================================================
 
-export async function GET() {
+export async function GET(request: NextRequest) {
+    // ── Simulation mode bypass ────────────────────────────────────────────
+    // Active when: ?sim=true param (sim-daemon) OR cookie sy-sim-mode=1 (FE toggle)
+    const { searchParams } = new URL(request.url);
+    const isSim =
+        searchParams.get("sim") === "true" ||
+        request.cookies.get("sy-sim-mode")?.value === "1";
+
+    if (isSim) {
+        // Cek apakah sim-inject sedang aktif → override utilization jika ada
+        let injectedUtil: number | undefined;
+        try {
+            const injectResp = await fetch("http://localhost:3099/inject-state", {
+                signal: AbortSignal.timeout(1_000),
+            });
+            if (injectResp.ok) {
+                const state = await injectResp.json();
+                injectedUtil = state.scenario?.utilization as number | undefined;
+            }
+        } catch { /* daemon/mock-server tidak jalan → gunakan static sim data */ }
+
+        const simData = {
+            ...SIM_DEFI_METRICS,
+            timestamp: Math.floor(Date.now() / 1000),
+            ...(injectedUtil !== undefined ? {
+                aave:     { ...SIM_DEFI_METRICS.aave,     utilization: injectedUtil },
+                compound: { ...SIM_DEFI_METRICS.compound, utilization: injectedUtil },
+                _injected: true,
+            } : {}),
+        };
+
+        return NextResponse.json(simData, { headers: { "X-Sim-Mode": "true", "X-Cache": "SIM" } });
+    }
+    // ─────────────────────────────────────────────────────────────────────
+
     // Return cached data if still fresh
     const cached = getCachedData();
     if (cached) {

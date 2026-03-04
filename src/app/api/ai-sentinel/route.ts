@@ -337,6 +337,62 @@ export async function GET(request: NextRequest) {
     );
   }
 
+  // ── Simulation mode bypass ────────────────────────────────────────────────
+  // Active when: ?sim=true param (sim-daemon via mock-variance-server)
+  //           OR cookie sy-sim-mode=1 (FE toggle button)
+  const isSim =
+    searchParams.get("sim") === "true" ||
+    request.cookies.get("sy-sim-mode")?.value === "1";
+
+  if (isSim) {
+    const config     = PROTOCOL_CONFIG[protocol];
+    const mockGithub = { recentCommits: 25, openIssues: 8, lastPushDaysAgo: 3, description: "" };
+    const headlines  = getMockHeadlines(config.cryptoPanicCurrency);
+    const aiResult   = fallbackRuleBasedScore(mockGithub, headlines);
+
+    // Cek apakah sim-inject sedang aktif → override AI score jika ada
+    let injectedAiScore: number | undefined;
+    try {
+      const injectResp = await fetch("http://localhost:3099/inject-state", {
+        signal: AbortSignal.timeout(1_000),
+      });
+      if (injectResp.ok) {
+        const state = await injectResp.json();
+        injectedAiScore = state.scenario?.aiScore as number | undefined;
+      }
+    } catch { /* daemon/mock-server tidak jalan → gunakan static sim data */ }
+
+    const finalScore: number = injectedAiScore !== undefined
+      ? Math.max(0, Math.min(100, injectedAiScore))
+      : aiResult.ai_threat_score;
+
+    const finalRecommendation: "HOLD" | "REDUCE" | "EXIT" =
+      finalScore > 70 ? "EXIT" : finalScore > 50 ? "REDUCE" : "HOLD";
+
+    return NextResponse.json(
+      {
+        protocol,
+        ...aiResult,
+        ai_threat_score: finalScore,
+        recommendation:  finalRecommendation,
+        reasoning:       injectedAiScore !== undefined
+          ? `[INJECTED SCENARIO] AI Threat Score: ${finalScore}/100`
+          : aiResult.reasoning,
+        github: { recentCommits: 25, openIssues: 8, lastPushDaysAgo: 3 },
+        sources: {
+          githubUrl:      config.github || "",
+          cryptoPanicUrl: `https://cryptopanic.com/news/${config.cryptoPanicCurrency}/`,
+        },
+        newsHeadlines: headlines,
+        timestamp: new Date().toISOString(),
+        _sim: true,
+        ...(injectedAiScore !== undefined ? { _injected: true } : {}),
+      },
+      { headers: { "X-Sim-Mode": "true", "X-Cache": "SIM" } }
+    );
+  }
+  // ─────────────────────────────────────────────────────────────────────────
+
   // Check cache first
   const now = Date.now();
   const cached = apiCache[protocol];

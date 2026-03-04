@@ -82,6 +82,46 @@ export async function GET(request: NextRequest) {
         );
     }
 
+    // ── Simulation mode bypass ────────────────────────────────────────────
+    // Active when: ?sim=true param (sim-daemon) OR cookie sy-sim-mode=1 (FE toggle)
+    // Snapshot is NOT stored in sim mode — avoids polluting real TVL history.
+    const isSim =
+        searchParams.get("sim") === "true" ||
+        request.cookies.get("sy-sim-mode")?.value === "1";
+
+    if (isSim) {
+        // Cek apakah sim-inject sedang aktif → override tvlChangePercent jika ada
+        let injectedTvlChange: number | undefined;
+        try {
+            const injectResp = await fetch("http://localhost:3099/inject-state", {
+                signal: AbortSignal.timeout(1_000),
+            });
+            if (injectResp.ok) {
+                const state = await injectResp.json();
+                injectedTvlChange = state.scenario?.tvlChangePercent as number | undefined;
+            }
+        } catch { /* daemon/mock-server tidak jalan → gunakan static sim data */ }
+
+        const tvlChangePct = injectedTvlChange !== undefined ? injectedTvlChange : -2.5;
+        const previousTvl  = currentTvl * (1 - tvlChangePct / 100);
+
+        return NextResponse.json(
+            {
+                currentTvl,
+                currentTimestamp:     currentTs,
+                previousTvl,
+                previousTimestamp:    currentTs - 300,
+                tvlChangePercent:     tvlChangePct,
+                comparisonAgeMinutes: 5,
+                snapshotCount:        42,
+                _sim:                 true,
+                ...(injectedTvlChange !== undefined ? { _injected: true } : {}),
+            },
+            { headers: { "Cache-Control": "no-store", "X-Sim-Mode": "true" } }
+        );
+    }
+    // ─────────────────────────────────────────────────────────────────────
+
     // --- Dedup: don't store if a snapshot exists within the dedup window ---
     const lastSnapshot = snapshots.length > 0
         ? snapshots[snapshots.length - 1]

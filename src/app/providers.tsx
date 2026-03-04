@@ -1,6 +1,7 @@
 'use client';
 
 import dynamic from 'next/dynamic';
+import { SimModeProvider } from '../context/SimModeContext';
 
 // Dynamic import with SSR disabled — prevents RainbowKit/wagmi from
 // accessing localStorage during server-side rendering
@@ -10,5 +11,11 @@ const WalletProvider = dynamic(
 );
 
 export default function Providers({ children }: { children: React.ReactNode }) {
-    return <WalletProvider>{children}</WalletProvider>;
+    return (
+        <WalletProvider>
+            <SimModeProvider>
+                {children}
+            </SimModeProvider>
+        </WalletProvider>
+    );
 }

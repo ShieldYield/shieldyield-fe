@@ -6,6 +6,7 @@ import { AdapterCard, RiskBadge, SentinelBanner, VaultActions, LiveYieldTicker, 
 import type { SentinelData } from '../components/Dashboard';
 import { Header } from '../components/Header';
 import { Navbar } from '../components/Navbar';
+import { useSimMode } from '../context/SimModeContext';
 
 interface PortfolioData {
   totalValueUsd: number;
@@ -24,6 +25,7 @@ export default function Home() {
 
   const { address: connectedWallet, isConnected } = useAccount();
   const wallet = isConnected ? connectedWallet : null;
+  const { isSimMode } = useSimMode();
 
   // Fetch portfolio + DeFi metrics (blockchain reads — free, can poll frequently)
   const fetchPortfolio = useCallback(async () => {
@@ -99,6 +101,43 @@ export default function Home() {
       setSentinel(null);
     }
   }, [isConnected]);
+
+  // ── Sim-inject polling: ketika SIM mode aktif, poll inject-state setiap 2s.
+  // Jika skenario berubah (inject/clear), refetch semua data otomatis tanpa refresh.
+  const scenarioKeyRef = useRef<string>("__INIT__");
+  useEffect(() => {
+    if (!isSimMode) {
+      scenarioKeyRef.current = "__INIT__"; // reset saat keluar SIM mode
+      return;
+    }
+
+    const poll = async () => {
+      try {
+        const resp = await fetch('/api/inject-state');
+        if (!resp.ok) return;
+        const { scenario } = await resp.json();
+
+        // Key unik berdasarkan injectedAt + type — berubah setiap inject/clear
+        const key = scenario ? `${scenario.type}:${scenario.injectedAt}` : "null";
+
+        if (scenarioKeyRef.current === "__INIT__") {
+          // Poll pertama: catat baseline, jangan refetch (data sudah fresh dari mount)
+          scenarioKeyRef.current = key;
+          return;
+        }
+
+        if (key !== scenarioKeyRef.current) {
+          scenarioKeyRef.current = key;
+          // Skenario berubah → refetch semua data
+          fetchPortfolio();
+          fetchSentinel();
+        }
+      } catch { /* daemon tidak jalan — diabaikan */ }
+    };
+
+    const interval = setInterval(poll, 2_000);
+    return () => clearInterval(interval);
+  }, [isSimMode, fetchPortfolio, fetchSentinel]);
 
   const adapters: Record<string, any> = portfolio?.adapters || {};
   const riskScores: Record<string, any> = portfolio?.riskScores || {};
