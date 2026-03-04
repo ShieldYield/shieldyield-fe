@@ -131,6 +131,16 @@ async function fetchDefiLlamaApys(): Promise<DefiLlamaResult> {
 const SHIELD_VAULT = "0xcFBd47c63D284A8F824e586596Df4d5c57326c8B" as const;
 const RISK_REGISTRY = "0xa23BE1297F836FF7D4E3297320ff16dbc7903e6D" as const;
 
+// Known adapter addresses on Arbitrum Sepolia → proper display names.
+// Contracts return "_0xXXXX" (hex prefix) instead of their protocol name,
+// so we resolve here before falling back to the contract's name() return value.
+const KNOWN_ADAPTER_NAMES: Record<string, string> = {
+  "0xb81961aa49d7e834404e299e688b3dc09a5efe5a": "AaveAdapter",
+  "0xcc547a2b0f18b34095623809977d54cfe306bebf": "CompoundAdapter",
+  "0x5f8a64bc67f23b8d5d02c7cfe187ad42d59f1d59": "MorphoAdapter",
+  "0x5ebd6f3da76c2b9c9d6aac89da08c388eab2b3cb": "YieldMaxAdapter",
+};
+
 // We no longer hardcode ADAPTERS here, we fetch them dynamically from ShieldVault!
 // ============================================================================
 // Minimal ABIs
@@ -400,16 +410,22 @@ export async function GET(request: NextRequest) {
     // Parse per-adapter results
     const adapters: Record<string, unknown> = {};
     const riskScores: Record<string, unknown> = {};
-    let totalAdapterBalance = 0n;
 
-    // Pre-calculate total adapter balance for allocation percentages
-    for (let i = 0; i < activeAdapters.length; i++) {
-      const baseIdx = i * 5;
-      const balance =
-        adapterResults[baseIdx + 1].status === "success"
-          ? (adapterResults[baseIdx + 1].result as bigint)
-          : 0n;
-      totalAdapterBalance += balance;
+    // Build allocation map from poolAllocations (vault's own accounting — correct source of truth).
+    // adapter.getBalance() returns the TOTAL balance for ALL users on the protocol,
+    // not the vault's share. pool.currentAmount tracks what the vault actually deposited.
+    const poolAllocationMap = new Map<string, { currentAmount: bigint; targetWeight: bigint }>();
+    let totalCurrentAmount = 0n;
+    let totalTargetWeight = 0n;
+    for (const pool of poolAllocations) {
+      if (pool.isActive) {
+        poolAllocationMap.set(pool.adapter.toLowerCase(), {
+          currentAmount: pool.currentAmount,
+          targetWeight: pool.targetWeight,
+        });
+        totalCurrentAmount += pool.currentAmount;
+        totalTargetWeight += pool.targetWeight;
+      }
     }
 
     for (let i = 0; i < activeAdapters.length; i++) {
@@ -417,13 +433,16 @@ export async function GET(request: NextRequest) {
       const baseIdx = i * 5;
 
       const nameObj = adapterResults[baseIdx];
-      // Fallback formatting: if the contract doesn't return a name, fallback to short address
       const contractRealName = nameObj.status === "success" && typeof nameObj.result === "string"
         ? nameObj.result
         : `Adapter_${addr.slice(0, 6)}`;
 
-      // Ensure the name ends with "Adapter" for standardizing icons on frontend
-      const name = contractRealName.endsWith("Adapter") ? contractRealName : `${contractRealName}Adapter`;
+      // Fix: contracts on testnet return "_0xXXXX" instead of proper protocol names.
+      // Resolve via known address mapping first, then fall back to contract name.
+      const resolvedName =
+        KNOWN_ADAPTER_NAMES[addr.toLowerCase()] ??
+        (contractRealName.endsWith("Adapter") ? contractRealName : `${contractRealName}Adapter`);
+      const name = resolvedName;
 
       const balance =
         adapterResults[baseIdx + 1].status === "success"
@@ -447,17 +466,35 @@ export async function GET(request: NextRequest) {
           })
           : null;
 
-      const balanceUsd = Number(formatUnits(balance, 6));
-      const principalUsd = userPosition
-        ? Number(formatUnits(userPosition.totalDeposited, 6)) / activeAdapters.length
+      // Use vault's own accounting (pool.currentAmount) for allocation %.
+      // adapter.getBalance() is the total for ALL users; currentAmount is what the vault deposited.
+      const poolData = poolAllocationMap.get(addr.toLowerCase());
+      const currentAmount = poolData?.currentAmount ?? 0n;
+      const targetWeight = poolData?.targetWeight ?? 0n;
+
+      // Target allocation from contract's configured weights (e.g. 25%, 25%, 30%, 20%)
+      const targetAllocation = totalTargetWeight > 0n
+        ? Number((targetWeight * 10000n) / totalTargetWeight) / 100
         : 0;
-      const allocation =
-        totalAdapterBalance > 0n
-          ? Number((balance * 10000n) / totalAdapterBalance) / 100
-          : 0;
+
+      // Allocation based on actual funds the vault has in this adapter.
+      // Fall back to targetAllocation if currentAmount not yet populated (no funds distributed yet).
+      const allocation = totalCurrentAmount > 0n
+        ? Number((currentAmount * 10000n) / totalCurrentAmount) / 100
+        : targetAllocation;
+
+      // User's actual share in this adapter
+      const userAdapterBalance = totalValueUsd * allocation / 100;
+
+      // Principal proportional to this adapter's allocation
+      const principalUsd = userPosition
+        ? Number(formatUnits(userPosition.totalDeposited, 6)) * allocation / 100
+        : 0;
+
+      const accruedYield = Math.max(0, userAdapterBalance - principalUsd);
 
       const prevBalance = previousBalances.get(name) ?? 0;
-      const adapterChange = calcChange(balanceUsd, prevBalance);
+      const adapterChange = calcChange(userAdapterBalance, prevBalance);
 
       // Use DeFiLlama APY if available, fallback to on-chain value
       const onChainApy = Number(apyBps) / 100;
@@ -465,12 +502,13 @@ export async function GET(request: NextRequest) {
 
       adapters[name] = {
         address: addr,
-        balance: balanceUsd,
+        balance: userAdapterBalance,
         apy,
         isHealthy: healthy,
         principal: principalUsd,
-        accruedYield: Math.max(0, balanceUsd - principalUsd),
-        allocation,
+        accruedYield,
+        allocation,        // actual current % (based on pool.currentAmount)
+        targetAllocation,  // configured target % (based on pool.targetWeight)
         changePercent: adapterChange.changePercent,
         changeDirection: adapterChange.changeDirection,
         ...(name === "YieldMaxAdapter" && yieldMaxTopPools.length > 0
@@ -479,7 +517,7 @@ export async function GET(request: NextRequest) {
       };
 
       // Update global previous balance for next comparison
-      previousBalances.set(name, balanceUsd);
+      previousBalances.set(name, userAdapterBalance);
 
       if (riskData) {
         riskScores[name] = {
