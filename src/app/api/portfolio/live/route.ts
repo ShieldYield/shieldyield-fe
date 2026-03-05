@@ -128,17 +128,17 @@ async function fetchDefiLlamaApys(): Promise<DefiLlamaResult> {
 // Contract Addresses (Arbitrum Sepolia)
 // ============================================================================
 
-const SHIELD_VAULT = "0xcFBd47c63D284A8F824e586596Df4d5c57326c8B" as const;
-const RISK_REGISTRY = "0xa23BE1297F836FF7D4E3297320ff16dbc7903e6D" as const;
+const SHIELD_VAULT = "0x603172402CE953f2a92ded983ae5b822865F0386" as const;
+const RISK_REGISTRY = "0xA94a0B4cB857Fc39E3054A9D4b42CA5897aa7E35" as const;
 
 // Known adapter addresses on Arbitrum Sepolia → proper display names.
 // Contracts return "_0xXXXX" (hex prefix) instead of their protocol name,
 // so we resolve here before falling back to the contract's name() return value.
 const KNOWN_ADAPTER_NAMES: Record<string, string> = {
-  "0xb81961aa49d7e834404e299e688b3dc09a5efe5a": "AaveAdapter",
-  "0xcc547a2b0f18b34095623809977d54cfe306bebf": "CompoundAdapter",
-  "0x5f8a64bc67f23b8d5d02c7cfe187ad42d59f1d59": "MorphoAdapter",
-  "0x5ebd6f3da76c2b9c9d6aac89da08c388eab2b3cb": "YieldMaxAdapter",
+  "0x0f2ed4a651d935aed42899034165101565670085": "AaveAdapter",
+  "0xbf71472d08b7bec6021d63961f6102b848977865": "CompoundAdapter",
+  "0x3ce790afe8868f825da2a085e27db9f0a06055c5": "MorphoAdapter",
+  "0xe68cf3ddde8cd12e8f2b7bf28b80fff2a41bb817": "YieldMaxAdapter",
 };
 
 // We no longer hardcode ADAPTERS here, we fetch them dynamically from ShieldVault!

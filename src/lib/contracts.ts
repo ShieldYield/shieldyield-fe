@@ -2,9 +2,9 @@
 // Contract Addresses (Arbitrum Sepolia)
 // ============================================================================
 
-export const SHIELD_VAULT_ADDRESS = '0xcFBd47c63D284A8F824e586596Df4d5c57326c8B' as const;
-export const MOCK_USDC_ADDRESS = '0x4d107C58DCda55ea6ea2B162d9C434F710E42038' as const;
-export const FAUCET_ADDRESS = '0x6E860FF2C4ea6b01815D74E54859Cdd9DD172256' as const;
+export const SHIELD_VAULT_ADDRESS = '0x603172402CE953f2a92ded983ae5b822865F0386' as const;
+export const MOCK_USDC_ADDRESS = '0xf35ff6b79Ac69840D738496f3BbF22A8eab61075' as const;
+export const FAUCET_ADDRESS = '0x8fBA92d7a9Db4Ce23375A799750F274Ecf3f878f' as const;
 
 // ============================================================================
 // ShieldVault ABI (subset for frontend interactions)

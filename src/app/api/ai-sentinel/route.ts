@@ -73,6 +73,42 @@ const apiCache: Record<string, CacheEntry> = {};
 const CACHE_DURATION_MS = 30 * 60 * 1000; // 30 minutes
 
 // ============================================================================
+// YieldMax Dynamic Resolver
+// ============================================================================
+
+async function getYieldMaxActiveProtocol(): Promise<string> {
+  try {
+    const res = await fetch("https://yields.llama.fi/pools", { cache: "no-store" });
+    if (!res.ok) return "YieldMax";
+
+    const { data: pools } = await res.json();
+
+    const EXCLUDED_PROJECTS = new Set([
+      "uniswap-v3", "uniswap-v4", "curve-dex", "balancer-v2",
+      "pancakeswap-amm-v3", "gmx-v2-perps", "steer-protocol",
+      "gamma", "beefy", "hermes-v2", "acryptos",
+    ]);
+
+    const usdcPools = pools.filter((p: any) =>
+      p.chain === "Arbitrum" &&
+      p.symbol?.toUpperCase() === "USDC" &&
+      !EXCLUDED_PROJECTS.has(p.project) &&
+      (p.apy ?? 0) > 0 &&
+      (p.apy ?? 0) < 50
+    );
+
+    if (usdcPools.length > 0) {
+      const sorted = usdcPools.sort((a: any, b: any) => (b.apy ?? 0) - (a.apy ?? 0));
+      // Return e.g. "Peapods Finance"
+      return sorted[0].project.replace(/-/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase());
+    }
+  } catch (err) {
+    console.error("[ai-sentinel] Failed to resolve YieldMax top protocol:", err);
+  }
+  return "YieldMax";
+}
+
+// ============================================================================
 // Data Fetchers
 // ============================================================================
 
@@ -345,10 +381,10 @@ export async function GET(request: NextRequest) {
     request.cookies.get("sy-sim-mode")?.value === "1";
 
   if (isSim) {
-    const config     = PROTOCOL_CONFIG[protocol];
+    const config = PROTOCOL_CONFIG[protocol];
     const mockGithub = { recentCommits: 25, openIssues: 8, lastPushDaysAgo: 3, description: "" };
-    const headlines  = getMockHeadlines(config.cryptoPanicCurrency);
-    const aiResult   = fallbackRuleBasedScore(mockGithub, headlines);
+    const headlines = getMockHeadlines(config.cryptoPanicCurrency);
+    const aiResult = fallbackRuleBasedScore(mockGithub, headlines);
 
     // Cek apakah sim-inject sedang aktif → override AI score jika ada
     let injectedAiScore: number | undefined;
@@ -374,13 +410,13 @@ export async function GET(request: NextRequest) {
         protocol,
         ...aiResult,
         ai_threat_score: finalScore,
-        recommendation:  finalRecommendation,
-        reasoning:       injectedAiScore !== undefined
+        recommendation: finalRecommendation,
+        reasoning: injectedAiScore !== undefined
           ? `[INJECTED SCENARIO] AI Threat Score: ${finalScore}/100`
           : aiResult.reasoning,
         github: { recentCommits: 25, openIssues: 8, lastPushDaysAgo: 3 },
         sources: {
-          githubUrl:      config.github || "",
+          githubUrl: config.github || "",
           cryptoPanicUrl: `https://cryptopanic.com/news/${config.cryptoPanicCurrency}/`,
         },
         newsHeadlines: headlines,
@@ -401,7 +437,15 @@ export async function GET(request: NextRequest) {
     return NextResponse.json(cached.data, { headers: { "X-Cache": "HIT" } });
   }
 
-  const config = PROTOCOL_CONFIG[protocol];
+  // Clone config so we don't mutate the global one
+  const config = { ...PROTOCOL_CONFIG[protocol] };
+
+  // 🚀 MAGIC: If YieldMax, dynamically find what protocol they are depositing into right now!
+  if (protocol === "YieldMaxAdapter") {
+    const activeProtocol = await getYieldMaxActiveProtocol();
+    console.log(`[ai-sentinel] YieldMax is routing to: ${activeProtocol}. Instructing AI to audit ${activeProtocol}.`);
+    config.name = activeProtocol !== "YieldMax" ? `${activeProtocol} (via YieldMax routing)` : "YieldMax";
+  }
 
   try {
     // Fetch GitHub + News in parallel

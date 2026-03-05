@@ -190,6 +190,7 @@ export function useDeposit() {
                 abi: ERC20_ABI,
                 functionName: 'approve',
                 args: [SHIELD_VAULT_ADDRESS, amountRaw],
+                gas: 500_000n,
             });
         },
         [writeApprove]
@@ -272,6 +273,10 @@ export function useWithdraw() {
                 abi: SHIELD_VAULT_ABI,
                 functionName: 'withdraw',
                 args: [sharesRaw],
+                // Explicit gas limit: prevents MetaMask from showing absurd
+                // gas estimates ($16M+) when the tx might revert on Arbitrum.
+                // 500_000 is well above the real cost (~150k) but safe.
+                gas: 500_000n,
             });
         },
         [writeWithdraw]

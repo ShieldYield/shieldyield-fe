@@ -197,36 +197,66 @@ export default function ProtocolPage() {
                         </div>
 
                         {/* YieldMax Top Opportunities */}
-                        {adapters['YieldMaxAdapter']?.topPools?.length > 0 && (
-                            <div className="bg-zinc-900/60 border border-zinc-800 rounded-2xl p-5">
-                                <div className="flex items-center gap-2 mb-1">
-                                    <span className="text-base">🟡</span>
-                                    <h3 className="text-sm font-semibold text-zinc-300 uppercase tracking-wider">
-                                        YieldMax — Top USDC Opportunities
-                                    </h3>
-                                    <span className="ml-auto text-[10px] text-zinc-500 bg-zinc-800 px-2 py-0.5 rounded-full">Arbitrum · DeFiLlama</span>
-                                </div>
-                                <p className="text-[11px] text-zinc-500 mb-4">
-                                    YieldMax routes funds to the highest-yielding USDC lending protocol on Arbitrum, rebalancing automatically.
-                                </p>
-                                <div className="space-y-1.5">
-                                    {adapters['YieldMaxAdapter'].topPools.map((pool: { protocol: string; apy: number }, i: number) => (
-                                        <div key={pool.protocol} className={`flex items-center justify-between px-3 py-2.5 rounded-xl ${i === 0 ? 'bg-yellow-500/10 border border-yellow-500/20' : 'bg-zinc-800/40'}`}>
-                                            <div className="flex items-center gap-2.5">
-                                                <span className="text-[10px] text-zinc-600 w-4">#{i + 1}</span>
-                                                <span className={`text-xs font-medium capitalize ${i === 0 ? 'text-zinc-100' : 'text-zinc-300'}`}>
-                                                    {pool.protocol.replace(/-/g, ' ')}
-                                                </span>
-                                                {i === 0 && <span className="text-[9px] bg-yellow-500/20 text-yellow-400 px-1.5 py-0.5 rounded-full">active</span>}
+                        {adapters['YieldMaxAdapter']?.topPools?.length > 0 && (() => {
+                            const isCritical = riskScores['YieldMaxAdapter']?.level === 'CRITICAL';
+                            const isEvacuated = adapters['YieldMaxAdapter']?.allocation === 0;
+                            const isSuspended = isCritical && isEvacuated;
+
+                            return (
+                                <div className={`border rounded-2xl p-5 ${isSuspended ? 'bg-red-900/10 border-red-900/30' : 'bg-zinc-900/60 border-zinc-800'}`}>
+                                    <div className="flex items-center gap-2 mb-1">
+                                        <span className={`text-base ${isSuspended ? 'opacity-50 grayscale' : ''}`}>🟡</span>
+                                        <h3 className={`text-sm font-semibold uppercase tracking-wider ${isSuspended ? 'text-red-400' : 'text-zinc-300'}`}>
+                                            YieldMax — Top USDC Opportunities
+                                        </h3>
+                                        <span className="ml-auto text-[10px] text-zinc-500 bg-zinc-800 px-2 py-0.5 rounded-full">Arbitrum · DeFiLlama</span>
+                                    </div>
+
+                                    {isSuspended ? (
+                                        <div className="mb-4 mt-2 p-3 bg-red-500/10 border border-red-500/20 rounded-xl">
+                                            <div className="flex items-center gap-2 mb-1">
+                                                <span className="text-red-400">⚠️</span>
+                                                <span className="text-xs font-semibold text-red-400 uppercase tracking-wider">Protocol Suspended</span>
                                             </div>
-                                            <span className={`text-sm font-bold ${i === 0 ? 'text-yellow-400' : 'text-emerald-400'}`}>
-                                                {pool.apy.toFixed(2)}%
-                                            </span>
+                                            <p className="text-[11px] text-zinc-400">
+                                                AI Sentinel detected <span className="text-red-400 font-semibold">CRITICAL</span> risk. All funds have been automatically evacuated from YieldMax and re-allocated to Safe Havens to prevent loss. Routing is paused until risk subsides.
+                                            </p>
                                         </div>
-                                    ))}
+                                    ) : (
+                                        <p className="text-[11px] text-zinc-500 mb-4">
+                                            YieldMax routes funds to the highest-yielding USDC lending protocol on Arbitrum, rebalancing automatically.
+                                        </p>
+                                    )}
+
+                                    <div className="space-y-1.5 opacity-80">
+                                        {adapters['YieldMaxAdapter'].topPools.map((pool: { protocol: string; apy: number }, i: number) => {
+                                            const isTop = i === 0;
+                                            const highlightBg = isSuspended ? 'bg-zinc-800/20 border border-zinc-800/30 line-through opacity-50' : 'bg-yellow-500/10 border border-yellow-500/20';
+                                            const highlightText = isSuspended ? 'text-zinc-500' : 'text-yellow-400';
+
+                                            return (
+                                                <div key={pool.protocol} className={`flex items-center justify-between px-3 py-2.5 rounded-xl ${isTop ? highlightBg : 'bg-zinc-800/20'}`}>
+                                                    <div className="flex items-center gap-2.5">
+                                                        <span className="text-[10px] text-zinc-600 w-4">#{i + 1}</span>
+                                                        <span className={`text-xs font-medium capitalize ${isTop && !isSuspended ? 'text-zinc-100' : 'text-zinc-400'}`}>
+                                                            {pool.protocol.replace(/-/g, ' ')}
+                                                        </span>
+                                                        {isTop && (
+                                                            <span className={`text-[9px] px-1.5 py-0.5 rounded-full ${isSuspended ? 'bg-red-500/20 text-red-400' : 'bg-yellow-500/20 text-yellow-400'}`}>
+                                                                {isSuspended ? 'suspended' : 'active'}
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                    <span className={`text-sm font-bold ${isTop ? highlightText : 'text-emerald-500/50'}`}>
+                                                        {pool.apy.toFixed(2)}%
+                                                    </span>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
                                 </div>
-                            </div>
-                        )}
+                            );
+                        })()}
 
                         {/* CCIP Safe Haven */}
                         {defiMetrics?.safeHaven && (
