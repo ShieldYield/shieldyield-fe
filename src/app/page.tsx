@@ -264,30 +264,16 @@ export default function Home() {
             {Object.keys(adapters).length > 0 && (() => {
               const totalYield = adapterEntries.reduce((sum: number, a: any) => sum + (a.accruedYield || 0), 0);
               return (
-                <LiveYieldTicker totalBalance={totalBal} weightedApy={weightedApy} totalAccruedYield={totalYield} />
+                <LiveYieldTicker
+                  totalBalance={totalBal}
+                  weightedApy={weightedApy}
+                  totalAccruedYield={totalYield}
+                  adapters={adapters}
+                />
               );
             })()}
 
-            {/* Fund Flow Diagram */}
-            {Object.keys(adapters).length > 0 && (
-              <FundFlowDiagram
-                totalValue={totalValue}
-                adapters={Object.entries(adapters).map(([name, data]: [string, any]) => ({
-                  name,
-                  balance: data.balance || 0,
-                  apy: data.apy || 0,
-                  allocation: data.allocation || 0,
-                  riskScore: riskScores[name]?.score,
-                  riskLevel: riskScores[name]?.level,
-                  isHealthy: data.isHealthy !== false,
-                }))}
-              />
-            )}
 
-            {/* AI Sentinel Banner */}
-            <div className="pt-4 pb-4">
-              <SentinelBanner data={sentinel} loading={sentinelLoading} />
-            </div>
 
             {/* Adapter Cards */}
             <div className="pt-2 space-y-4">

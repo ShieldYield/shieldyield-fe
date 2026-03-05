@@ -6,12 +6,21 @@ interface LiveYieldTickerProps {
     totalBalance: number;
     weightedApy: number; // weighted average APY across all adapters
     totalAccruedYield: number;
+    adapters: Record<string, any>;
 }
+
+const protocolColors: Record<string, string> = {
+    AaveAdapter: 'bg-blue-500',
+    CompoundAdapter: 'bg-green-500',
+    MorphoAdapter: 'bg-purple-500',
+    YieldMaxAdapter: 'bg-yellow-500',
+};
 
 export default function LiveYieldTicker({
     totalBalance,
     weightedApy,
     totalAccruedYield,
+    adapters,
 }: LiveYieldTickerProps) {
     // Yield per second = (balance × APY%) / seconds_in_year
     const yieldPerSecond = (totalBalance * (weightedApy / 100)) / 31_536_000;
@@ -79,7 +88,7 @@ export default function LiveYieldTicker({
                 </div>
 
                 {/* Stats row */}
-                <div className="flex items-center gap-6 mt-4 pt-3 border-t border-zinc-800/50">
+                <div className="flex items-center gap-6 mt-4 pt-4 border-t border-zinc-800/50">
                     <div className="flex flex-col gap-0.5">
                         <span className="text-[10px] text-zinc-600 uppercase tracking-widest">Per Day</span>
                         <span className="text-sm font-mono text-zinc-300">
@@ -97,6 +106,56 @@ export default function LiveYieldTicker({
                         </span>
                     </div>
                 </div>
+
+                {/* Graph-based Allocation Overview */}
+                {Object.keys(adapters).length > 0 && (
+                    <div className="mt-6 pt-5 border-t border-zinc-800/50">
+                        <div className="flex items-center justify-between mb-3">
+                            <span className="text-[10px] text-zinc-500 uppercase tracking-widest font-medium">Allocation Overview</span>
+                        </div>
+
+                        {/* Stacked Bar Graph */}
+                        <div className="h-2.5 w-full bg-zinc-800 rounded-full overflow-hidden flex mb-4">
+                            {Object.entries(adapters).map(([name, data]) => {
+                                if (data.allocation <= 0) return null;
+                                return (
+                                    <div
+                                        key={name}
+                                        className={`h-full ${protocolColors[name] || 'bg-zinc-500'} transition-all`}
+                                        style={{ width: `${data.allocation}%` }}
+                                        title={`${name.replace('Adapter', '')}: ${data.allocation.toFixed(1)}%`}
+                                    />
+                                );
+                            })}
+                        </div>
+
+                        {/* Breakdown Legend */}
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                            {Object.entries(adapters).map(([name, data]) => {
+                                if (data.allocation <= 0 && data.balance <= 0) return null;
+                                return (
+                                    <div key={name} className="flex flex-col gap-1">
+                                        <div className="flex items-center gap-1.5">
+                                            <span className={`w-2 h-2 rounded-full ${protocolColors[name] || 'bg-zinc-500'}`} />
+                                            <span className="text-xs font-medium text-zinc-300">{name.replace('Adapter', '')}</span>
+                                        </div>
+                                        <div className="pl-3.5 flex flex-col gap-0.5">
+                                            <span className="text-[10px] font-light text-zinc-400">
+                                                {data.allocation.toFixed(1)}% Alloc
+                                            </span>
+                                            <span className="text-[10px] font-mono text-zinc-500">
+                                                ${data.balance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                            </span>
+                                            <span className="text-[10px] font-mono text-emerald-500/80">
+                                                {data.apy.toFixed(2)}% APY
+                                            </span>
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    </div>
+                )}
             </div>
         </div>
     );
