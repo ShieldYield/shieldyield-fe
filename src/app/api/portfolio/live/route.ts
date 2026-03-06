@@ -128,17 +128,17 @@ async function fetchDefiLlamaApys(): Promise<DefiLlamaResult> {
 // Contract Addresses (Arbitrum Sepolia)
 // ============================================================================
 
-const SHIELD_VAULT = "0x603172402CE953f2a92ded983ae5b822865F0386" as const;
-const RISK_REGISTRY = "0xA94a0B4cB857Fc39E3054A9D4b42CA5897aa7E35" as const;
+const SHIELD_VAULT = "0x4d0A651776F789c4a7E23563aC3110Aa63A20F7C" as const;
+const RISK_REGISTRY = "0xDd00b97Cd8Df07BbC95D9eAfb680A86358943C06" as const;
 
 // Known adapter addresses on Arbitrum Sepolia → proper display names.
 // Contracts return "_0xXXXX" (hex prefix) instead of their protocol name,
 // so we resolve here before falling back to the contract's name() return value.
 const KNOWN_ADAPTER_NAMES: Record<string, string> = {
-  "0x0f2ed4a651d935aed42899034165101565670085": "AaveAdapter",
-  "0xbf71472d08b7bec6021d63961f6102b848977865": "CompoundAdapter",
-  "0x3ce790afe8868f825da2a085e27db9f0a06055c5": "MorphoAdapter",
-  "0xe68cf3ddde8cd12e8f2b7bf28b80fff2a41bb817": "YieldMaxAdapter",
+  "0x2ab8a676ca67bab1c9e78f70c48b5b04eb288d8a": "AaveAdapter",
+  "0x7816d0b6399cfa2e81ae3c07721ee43cb3b3c6c8": "CompoundAdapter",
+  "0x9d64139fed95cfad4d606aa8f145351068cf36ac": "MorphoAdapter",
+  "0xf6b7306abe85b6b7236c4e5e79443773ef13b4f3": "YieldMaxAdapter",
 };
 
 // We no longer hardcode ADAPTERS here, we fetch them dynamically from ShieldVault!
@@ -308,32 +308,6 @@ export async function GET(request: NextRequest) {
   }
 
   const walletLower = wallet.toLowerCase();
-
-  // ── SIMULATION MODE: If CLI demo script is running, serve its state ──
-  const SIM_FILE = "/tmp/shieldyield-simulation.json";
-  try {
-    if (fs.existsSync(SIM_FILE)) {
-      const raw = fs.readFileSync(SIM_FILE, "utf-8");
-      const simState = JSON.parse(raw);
-      if (simState.active) {
-        console.log(`[portfolio/live] 🎬 SIMULATION MODE — step ${simState.step}: ${simState.stepLabel}`);
-        return NextResponse.json({
-          totalValueUsd: simState.totalValueUsd,
-          totalChangePercent: simState.totalChangePercent ?? 0,
-          totalChangeDirection: simState.totalChangeDirection ?? "neutral",
-          adapters: simState.adapters,
-          riskScores: simState.riskScores,
-          totalAssets: simState.totalAssets ?? simState.totalValueUsd,
-          lastUpdated: simState.lastUpdated,
-          simulation: true,
-          simulationStep: simState.step,
-          simulationLabel: simState.stepLabel,
-        }, {
-          headers: { "X-Cache": "SIM", "X-Simulation": "true" },
-        });
-      }
-    }
-  } catch { /* simulation file not present or invalid — continue with real data */ }
 
   // Check cache
   if (cache && cache.wallet === walletLower && Date.now() - cache.timestamp < CACHE_TTL_MS) {

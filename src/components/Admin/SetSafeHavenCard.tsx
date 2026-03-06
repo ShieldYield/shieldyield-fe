@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useWriteContract, useReadContract } from "wagmi";
 import { isAddress } from "viem";
 
-const SHIELD_VAULT = "0x603172402CE953f2a92ded983ae5b822865F0386";
+const SHIELD_VAULT = "0x1997fFea2efCca2F052F5A600c6315B763E5adC1";
 
 // ABI for ShieldVault Admin functions
 const SHIELD_VAULT_ABI = [

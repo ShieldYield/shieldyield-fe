@@ -6,8 +6,9 @@ import {
     useWaitForTransactionReceipt,
     useReadContracts,
     useAccount,
+    usePublicClient,
 } from 'wagmi';
-import { parseUnits, formatUnits, type Address } from 'viem';
+import { parseUnits, formatUnits } from 'viem';
 import {
     SHIELD_VAULT_ADDRESS,
     SHIELD_VAULT_ABI,
@@ -99,6 +100,46 @@ export function useVaultData() {
 }
 
 // ============================================================================
+// Helpers
+// ============================================================================
+
+/**
+ * Extract human-readable message from a viem/wagmi error.
+ * viem formats multi-line errors like:
+ *   The contract function "foo" reverted with the following reason:\nActual reason\n...
+ * split('\n')[0] only returns the header — this grabs the actual reason.
+ */
+function extractErrorMessage(error: Error): string {
+    const anyErr = error as any;
+    // viem ContractFunctionRevertedError exposes shortMessage with just the reason
+    if (anyErr.shortMessage) return anyErr.shortMessage;
+    if (anyErr.cause?.shortMessage) return anyErr.cause.shortMessage;
+
+    // Parse multi-line viem error: reason is on the 2nd line
+    const msg = error.message || '';
+    const reasonMatch = msg.match(/reverted with the following reason:\n(.*)/);
+    if (reasonMatch) return reasonMatch[1].trim();
+
+    return msg.split('\n')[0] || 'Transaction failed';
+}
+
+/**
+ * Returns a safe gasPrice for legacy (Type 0) transactions on Arbitrum Sepolia.
+ *
+ * MetaMask consistently overrides EIP-1559 maxFeePerGas/maxPriorityFeePerGas
+ * with its own stale RPC estimate (~0.02 gwei), which falls below the actual
+ * baseFee. Legacy transactions bypass this override — MetaMask respects the
+ * provided gasPrice directly.
+ *
+ * Floor of 0.5 gwei ensures we always clear the baseFee regardless of RPC staleness.
+ */
+async function getFreshGasPrice(client: NonNullable<ReturnType<typeof usePublicClient>>) {
+    const rpcGasPrice = await client.getGasPrice();
+    const computed = rpcGasPrice * 4n;
+    const floor = 500_000_000n; // 0.5 gwei — 25x Arbitrum Sepolia's ~0.02 gwei baseFee
+    return computed > floor ? computed : floor;
+}
+// ============================================================================
 // useDeposit — 2-step: Approve USDC → Deposit into ShieldVault
 // ============================================================================
 
@@ -107,6 +148,7 @@ type DepositStep = 'idle' | 'approving' | 'waitingApproval' | 'depositing' | 'wa
 export function useDeposit() {
     const [step, setStep] = useState<DepositStep>('idle');
     const [error, setError] = useState<string | null>(null);
+    const publicClient = usePublicClient();
 
     // Approve tx
     const {
@@ -134,6 +176,8 @@ export function useDeposit() {
     const {
         isLoading: isDepositConfirming,
         isSuccess: isDepositConfirmed,
+        isError: isDepositReceiptError,
+        error: depositReceiptError,
     } = useWaitForTransactionReceipt({ hash: depositHash });
 
     // Step 2: After approval confirmed, execute deposit
@@ -142,14 +186,19 @@ export function useDeposit() {
     useEffect(() => {
         if (isApproveConfirmed && step === 'waitingApproval' && pendingAmount > 0n) {
             setStep('depositing');
-            writeDeposit({
-                address: SHIELD_VAULT_ADDRESS,
-                abi: SHIELD_VAULT_ABI,
-                functionName: 'deposit',
-                args: [pendingAmount],
-            });
+            (async () => {
+                const gasPrice = await getFreshGasPrice(publicClient!);
+                writeDeposit({
+                    address: SHIELD_VAULT_ADDRESS,
+                    abi: SHIELD_VAULT_ABI,
+                    functionName: 'deposit',
+                    args: [pendingAmount],
+                    gas: 700_000n,
+                    gasPrice,
+                });
+            })();
         }
-    }, [isApproveConfirmed, step, pendingAmount, writeDeposit]);
+    }, [isApproveConfirmed, step, pendingAmount, writeDeposit, publicClient]);
 
     // Track deposit pending → confirming
     useEffect(() => {
@@ -165,35 +214,46 @@ export function useDeposit() {
         }
     }, [isDepositConfirmed, step]);
 
-    // Track errors
+    // Track errors (submission failures)
     useEffect(() => {
         if (approveError) {
-            setError(approveError.message?.split('\n')[0] || 'Approve failed');
+            setError(extractErrorMessage(approveError));
             setStep('error');
         }
         if (depositError) {
-            setError(depositError.message?.split('\n')[0] || 'Deposit failed');
+            setError(extractErrorMessage(depositError));
             setStep('error');
         }
     }, [approveError, depositError]);
 
+    // Handle on-chain revert: deposit tx submitted OK but reverted during execution
+    useEffect(() => {
+        if (isDepositReceiptError && depositReceiptError) {
+            setError(extractErrorMessage(depositReceiptError));
+            setStep('error');
+        }
+    }, [isDepositReceiptError, depositReceiptError]);
+
     const deposit = useCallback(
-        (amountUsdc: number) => {
+        async (amountUsdc: number) => {
             setError(null);
             setStep('approving');
 
             const amountRaw = parseUnits(amountUsdc.toString(), USDC_DECIMALS);
             setPendingAmount(amountRaw);
 
+            const gasPrice = await getFreshGasPrice(publicClient!);
+
             writeApprove({
                 address: MOCK_USDC_ADDRESS,
                 abi: ERC20_ABI,
                 functionName: 'approve',
                 args: [SHIELD_VAULT_ADDRESS, amountRaw],
-                gas: 500_000n,
+                gas: 100_000n,
+                gasPrice,
             });
         },
-        [writeApprove]
+        [writeApprove, publicClient]
     );
 
     // Track approve pending → confirming
@@ -230,6 +290,7 @@ type WithdrawStep = 'idle' | 'withdrawing' | 'waitingWithdraw' | 'success' | 'er
 export function useWithdraw() {
     const [step, setStep] = useState<WithdrawStep>('idle');
     const [error, setError] = useState<string | null>(null);
+    const publicClient = usePublicClient();
 
     const {
         writeContract: writeWithdraw,
@@ -242,6 +303,8 @@ export function useWithdraw() {
     const {
         isLoading: isConfirming,
         isSuccess: isConfirmed,
+        isError: isReceiptError,
+        error: receiptError,
     } = useWaitForTransactionReceipt({ hash: withdrawHash });
 
     useEffect(() => {
@@ -258,28 +321,36 @@ export function useWithdraw() {
 
     useEffect(() => {
         if (withdrawError) {
-            setError(withdrawError.message?.split('\n')[0] || 'Withdraw failed');
+            setError(extractErrorMessage(withdrawError));
             setStep('error');
         }
     }, [withdrawError]);
 
+    // Handle on-chain revert: tx submitted OK but reverted during execution
+    useEffect(() => {
+        if (isReceiptError && receiptError) {
+            setError(extractErrorMessage(receiptError));
+            setStep('error');
+        }
+    }, [isReceiptError, receiptError]);
+
     const withdraw = useCallback(
-        (sharesRaw: bigint) => {
+        async (sharesRaw: bigint) => {
             setError(null);
             setStep('withdrawing');
+
+            const gasPrice = await getFreshGasPrice(publicClient!);
 
             writeWithdraw({
                 address: SHIELD_VAULT_ADDRESS,
                 abi: SHIELD_VAULT_ABI,
                 functionName: 'withdraw',
                 args: [sharesRaw],
-                // Explicit gas limit: prevents MetaMask from showing absurd
-                // gas estimates ($16M+) when the tx might revert on Arbitrum.
-                // 500_000 is well above the real cost (~150k) but safe.
                 gas: 500_000n,
+                gasPrice,
             });
         },
-        [writeWithdraw]
+        [writeWithdraw, publicClient]
     );
 
     const reset = useCallback(() => {
