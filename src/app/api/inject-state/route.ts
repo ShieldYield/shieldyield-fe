@@ -5,13 +5,23 @@ import { arbitrumSepolia } from "viem/chains";
 /**
  * GET /api/inject-state
  * ─────────────────────────────────────────────────────────────
- * Updated for Hackathon:
- * Reads risk levels directly from the Arbitrum Sepolia
- * RiskRegistry contract instead of a local mock server.
+ * Priority:
+ * 1. Mock variance server (port 3099) — for demo inject via CLI
+ *    (bun sim:inject-medium / bun sim:inject-critical)
+ *    → immediate FE reaction, no chain write needed
+ * 2. RiskRegistry on-chain — real scores from CRE daemon
  * ─────────────────────────────────────────────────────────────
  */
 
 export const dynamic = "force-dynamic";
+
+const MOCK_SERVER = "http://localhost:3099";
+
+// Maps injected scenario type → which adapter shows the threat on dashboard
+const SCENARIO_THREAT: Record<string, Record<string, string>> = {
+    warning:  { MorphoAdapter: "WARNING" },    // sim-inject-medium: AI score 75 on Morpho
+    critical: { YieldMaxAdapter: "CRITICAL" }, // sim-inject-critical: TVL -25.5% on YieldMax
+};
 
 const RISK_REGISTRY = "0xDd00b97Cd8Df07BbC95D9eAfb680A86358943C06" as const;
 
@@ -56,6 +66,27 @@ const client = createPublicClient({
 });
 
 export async function GET() {
+    // ── 1. Check mock variance server first (CLI inject: bun sim:inject-*) ──
+    try {
+        const mockRes = await fetch(`${MOCK_SERVER}/inject-state`, {
+            signal: AbortSignal.timeout(1_000),
+        });
+        if (mockRes.ok) {
+            const mockData = await mockRes.json() as { scenario?: { type?: string } | null };
+            const scenarioType = mockData.scenario?.type;
+            if (scenarioType && SCENARIO_THREAT[scenarioType]) {
+                return NextResponse.json({
+                    scenario: scenarioType,
+                    details: SCENARIO_THREAT[scenarioType],
+                    _source: "mock",
+                });
+            }
+        }
+    } catch {
+        // mock server not running → fall through to on-chain
+    }
+
+    // ── 2. Fall back to RiskRegistry on-chain (real CRE daemon scores) ──
     try {
         const calls = Object.values(ADAPTERS).map((addr) => ({
             address: RISK_REGISTRY as Address,
@@ -66,7 +97,6 @@ export async function GET() {
 
         const results = await client.multicall({ contracts: calls });
 
-        // Build a scenario object mapping adapters to threat levels
         const activeThreats: Record<string, string> = {};
         const adapterNames = Object.keys(ADAPTERS);
 
@@ -76,27 +106,22 @@ export async function GET() {
             if (res.status === "success") {
                 const data = res.result as { threatLevel: number };
                 const level = THREAT_LEVELS[data.threatLevel] || "SAFE";
-                // Only track protocols that are WARNING or CRITICAL
                 if (level === "WARNING" || level === "CRITICAL") {
                     activeThreats[name] = level;
                 }
             }
         }
 
-        // Determine synthetic scenario based on active threats
         let scenario = null;
         if (activeThreats["YieldMaxAdapter"] === "CRITICAL") {
             scenario = "critical";
-        } else if (activeThreats["YieldMaxAdapter"] === "WARNING") {
+        } else if (activeThreats["MorphoAdapter"] === "WARNING") {
             scenario = "warning";
         } else if (Object.keys(activeThreats).length > 0) {
-            scenario = "custom"; // Other threats detected
+            scenario = "custom";
         }
 
-        return NextResponse.json({
-            scenario,
-            details: activeThreats,
-        });
+        return NextResponse.json({ scenario, details: activeThreats, _source: "chain" });
     } catch (err) {
         console.error("inject-state fetch error:", err);
         return NextResponse.json({ scenario: null });

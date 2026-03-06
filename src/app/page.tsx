@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { useAccount } from 'wagmi';
-import { AdapterCard, RiskBadge, SentinelBanner, VaultActions, LiveYieldTicker, FundFlowDiagram } from '../components/Dashboard';
+import { AdapterCard, RiskBadge, SentinelBanner, VaultActions, LiveYieldTicker, FundFlowDiagram, CrossChainSafeHaven } from '../components/Dashboard';
 import type { SentinelData } from '../components/Dashboard';
 import { Header } from '../components/Header';
 import { Navbar } from '../components/Navbar';
@@ -66,7 +66,18 @@ export default function Home() {
     }
 
     try {
-      const res = await fetch('/api/ai-sentinel?protocol=AaveAdapter');
+      // Use injected protocol when a scenario is active, otherwise default to Aave
+      let protocol = 'AaveAdapter';
+      try {
+        const injectRes = await fetch('/api/inject-state');
+        if (injectRes.ok) {
+          const { scenario } = await injectRes.json();
+          if (scenario === 'warning') protocol = 'MorphoAdapter';
+          else if (scenario === 'critical') protocol = 'YieldMaxAdapter';
+        }
+      } catch { /* keep default */ }
+
+      const res = await fetch(`/api/ai-sentinel?protocol=${protocol}`);
       if (res.ok) {
         const data = await res.json();
         setSentinel(data);
@@ -117,8 +128,8 @@ export default function Home() {
         if (!resp.ok) return;
         const { scenario } = await resp.json();
 
-        // Key unik berdasarkan injectedAt + type — berubah setiap inject/clear
-        const key = scenario ? `${scenario.type}:${scenario.injectedAt}` : "null";
+        // Key unik berdasarkan scenario string — berubah setiap inject/clear
+        const key = scenario ?? "null";
 
         if (scenarioKeyRef.current === "__INIT__") {
           // Poll pertama: catat baseline, jangan refetch (data sudah fresh dari mount)
@@ -347,6 +358,9 @@ export default function Home() {
                 </div>
               </div>
             )}
+
+            {/* Cross-Chain Safe Haven — CCIP Bridge to Base Sepolia */}
+            <CrossChainSafeHaven />
           </div>
         )}
       </main>

@@ -373,6 +373,43 @@ export async function GET(request: NextRequest) {
     );
   }
 
+  // ── Mock server inject bypass (always active when daemon is running) ──────
+  // Checks port 3099 regardless of sim mode. If a matching inject scenario is
+  // active for this protocol, return injected AI data immediately.
+  const INJECT_TARGET: Record<string, string> = {
+    warning:  "MorphoAdapter",
+    critical: "YieldMaxAdapter",
+  };
+  try {
+    const injectResp = await fetch("http://localhost:3099/inject-state", {
+      signal: AbortSignal.timeout(1_000),
+    });
+    if (injectResp.ok) {
+      const { scenario } = await injectResp.json();
+      if (scenario && INJECT_TARGET[scenario.type] === protocol) {
+        const aiScore: number = Math.max(0, Math.min(100, scenario.aiScore ?? 75));
+        const recommendation: "HOLD" | "REDUCE" | "EXIT" =
+          aiScore > 70 ? "EXIT" : aiScore > 50 ? "REDUCE" : "HOLD";
+        return NextResponse.json({
+          protocol,
+          ai_threat_score: aiScore,
+          confidence: 0.92,
+          reasoning: `[INJECTED SCENARIO] ${scenario.label}${scenario.description ? ": " + scenario.description : ""}`,
+          signals: [
+            { source: "inject", signal: scenario.label, sentiment: "negative" },
+          ],
+          recommendation,
+          github: { recentCommits: 0, openIssues: 0, lastPushDaysAgo: 0 },
+          sources: { githubUrl: "", cryptoPanicUrl: "" },
+          newsHeadlines: scenario.description ? [scenario.description] : [],
+          timestamp: new Date().toISOString(),
+          _injected: true,
+        });
+      }
+    }
+  } catch { /* mock server not running — continue to normal path */ }
+  // ─────────────────────────────────────────────────────────────────────────
+
   // ── Simulation mode bypass ────────────────────────────────────────────────
   // Active when: ?sim=true param (sim-daemon via mock-variance-server)
   //           OR cookie sy-sim-mode=1 (FE toggle button)
@@ -386,7 +423,11 @@ export async function GET(request: NextRequest) {
     const headlines = getMockHeadlines(config.cryptoPanicCurrency);
     const aiResult = fallbackRuleBasedScore(mockGithub, headlines);
 
-    // Cek apakah sim-inject sedang aktif → override AI score jika ada
+    // Cek apakah sim-inject sedang aktif → override AI score HANYA jika protocol ini adalah target inject
+    const SIM_INJECT_TARGET: Record<string, string> = {
+      warning:  "MorphoAdapter",
+      critical: "YieldMaxAdapter",
+    };
     let injectedAiScore: number | undefined;
     try {
       const injectResp = await fetch("http://localhost:3099/inject-state", {
@@ -394,7 +435,11 @@ export async function GET(request: NextRequest) {
       });
       if (injectResp.ok) {
         const state = await injectResp.json();
-        injectedAiScore = state.scenario?.aiScore as number | undefined;
+        const injectType = state.scenario?.type;
+        // Hanya apply injected score ke protocol yang ditarget
+        if (injectType && SIM_INJECT_TARGET[injectType] === protocol) {
+          injectedAiScore = state.scenario?.aiScore as number | undefined;
+        }
       }
     } catch { /* daemon/mock-server tidak jalan → gunakan static sim data */ }
 

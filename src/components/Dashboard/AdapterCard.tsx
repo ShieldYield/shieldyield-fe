@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import RiskBadge from './RiskBadge';
 
 interface AiSentinelData {
@@ -53,6 +53,20 @@ export default function AdapterCard({ name, data, riskScore }: AdapterCardProps)
     const [aiOpen, setAiOpen] = useState(false);
     const [aiData, setAiData] = useState<AiSentinelData | null>(null);
     const [aiLoading, setAiLoading] = useState(false);
+
+    // When risk score changes (inject scenario active), clear stale AI data.
+    // If the panel is already open, re-fetch immediately so the user sees updated values.
+    useEffect(() => {
+        setAiData(null);
+        if (aiOpen) {
+            setAiLoading(true);
+            fetch(`/api/ai-sentinel?protocol=${name}`)
+                .then(res => res.ok ? res.json() : null)
+                .then(data => { if (data) setAiData(data); })
+                .catch(() => {})
+                .finally(() => setAiLoading(false));
+        }
+    }, [riskScore?.score]); // eslint-disable-line react-hooks/exhaustive-deps
 
     const icon = protocolIcons[name] || '⚪';
     const displayName = name.replace('Adapter', '');

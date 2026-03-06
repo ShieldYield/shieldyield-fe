@@ -309,8 +309,17 @@ export async function GET(request: NextRequest) {
 
   const walletLower = wallet.toLowerCase();
 
-  // Check cache
-  if (cache && cache.wallet === walletLower && Date.now() - cache.timestamp < CACHE_TTL_MS) {
+  // Check cache — skip if mock server has active inject scenario
+  let hasMockInject = false;
+  try {
+    const mockCheck = await fetch("http://localhost:3099/inject-state", { signal: AbortSignal.timeout(300) });
+    if (mockCheck.ok) {
+      const { scenario } = await mockCheck.json() as { scenario?: { type?: string } | null };
+      hasMockInject = !!scenario?.type;
+    }
+  } catch { /* mock server not running */ }
+
+  if (!hasMockInject && cache && cache.wallet === walletLower && Date.now() - cache.timestamp < CACHE_TTL_MS) {
     return NextResponse.json(cache.data, { headers: { "X-Cache": "HIT" } });
   }
 
@@ -503,6 +512,22 @@ export async function GET(request: NextRequest) {
 
     const totalChange = calcChange(totalValueUsd, previousTotalValue);
     previousTotalValue = totalValueUsd;
+
+    // Override riskScores if mock server has an active inject scenario
+    try {
+      const mockRes = await fetch("http://localhost:3099/inject-state", {
+        signal: AbortSignal.timeout(500),
+      });
+      if (mockRes.ok) {
+        const mockData = await mockRes.json() as { scenario?: { type?: string } | null };
+        const scenarioType = mockData.scenario?.type;
+        if (scenarioType === "warning") {
+          riskScores["MorphoAdapter"] = { score: 65, level: "WARNING" };
+        } else if (scenarioType === "critical") {
+          riskScores["YieldMaxAdapter"] = { score: 85, level: "CRITICAL" };
+        }
+      }
+    } catch { /* mock server not running — keep chain scores */ }
 
     const responseData = {
       totalValueUsd,

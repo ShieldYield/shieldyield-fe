@@ -8,4 +8,5 @@ export { default as AiTransparencyPanel } from './AiTransparencyPanel';
 export { default as VaultActions } from './VaultActions';
 export { default as LiveYieldTicker } from './LiveYieldTicker';
 export { default as FundFlowDiagram } from './FundFlowDiagram';
+export { default as CrossChainSafeHaven } from './CrossChainSafeHaven';
 export type { SentinelData } from './SentinelBanner';
