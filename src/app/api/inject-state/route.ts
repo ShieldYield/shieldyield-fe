@@ -23,14 +23,14 @@ const SCENARIO_THREAT: Record<string, Record<string, string>> = {
     critical: { YieldMaxAdapter: "CRITICAL" }, // sim-inject-critical: TVL -25.5% on YieldMax
 };
 
-const RISK_REGISTRY = "0xDd00b97Cd8Df07BbC95D9eAfb680A86358943C06" as const;
+const RISK_REGISTRY = "0x28B38104F3cD62EABE17E927d61DbC50B834b1B7" as const;
 
 // Known adapters
 const ADAPTERS: Record<string, Address> = {
-  AaveAdapter: "0x2AB8a676Ca67bAB1C9e78f70C48b5b04eb288D8a",
-  CompoundAdapter: "0x7816D0b6399CfA2e81AE3c07721EE43cb3b3c6c8",
-  MorphoAdapter: "0x9D64139FEd95CFAd4d606aA8f145351068Cf36ac",
-  YieldMaxAdapter: "0xf6b7306abe85B6B7236C4e5e79443773Ef13B4f3",
+  AaveAdapter: "0x8BdCad76328f00AB9A0712E8292fc1a1aDCaa82a",
+  CompoundAdapter: "0xF2F0fa5fC187cFE6538d72C86ccCADa996956aAA",
+  MorphoAdapter: "0x3f5b509a1d59814567fe370a471463c3AEa38400",
+  YieldMaxAdapter: "0xaFD04A3A43a8B8d4523e3F1031071D1D378D8096",
 };
 
 const RISK_REGISTRY_ABI = [

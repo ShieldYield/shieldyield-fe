@@ -2,9 +2,8 @@
 // Contract Addresses (Arbitrum Sepolia)
 // ============================================================================
 
-export const SHIELD_VAULT_ADDRESS = '0x1997fFea2efCca2F052F5A600c6315B763E5adC1' as const;
-export const MOCK_USDC_ADDRESS = '0xd91d6ddd2c5933EBE30FC7c7aA9e339D4ffC6f51' as const;
-export const FAUCET_ADDRESS = '0x7cCD91722D31c9fc38a4FfadeA9c2Adf0C78a627' as const;
+export const SHIELD_VAULT_ADDRESS = '0xe6D20be65eA58e30eFCb8DBe677772959aAdFCd9' as const;
+export const MOCK_USDC_ADDRESS = '0xA8C0c11bf64AF62CDCA6f93D3769B88BdD7cb93D' as const; // CCIP-BnM on Arb Sepolia
 
 // ============================================================================
 // ShieldVault ABI (subset for frontend interactions)
@@ -82,7 +81,7 @@ export const SHIELD_VAULT_ABI = [
 ] as const;
 
 // ============================================================================
-// ERC-20 ABI (subset for USDC approve / allowance / balanceOf)
+// ERC-20 ABI (subset for BnM approve / allowance / balanceOf)
 // ============================================================================
 
 export const ERC20_ABI = [
@@ -123,22 +122,8 @@ export const ERC20_ABI = [
 ] as const;
 
 // ============================================================================
-// Faucet ABI
-// ============================================================================
-
-export const FAUCET_ABI = [
-    {
-        name: 'claim',
-        type: 'function',
-        stateMutability: 'nonpayable',
-        inputs: [],
-        outputs: [],
-    },
-] as const;
-
-// ============================================================================
 // Constants
 // ============================================================================
 
-export const USDC_DECIMALS = 6;
-export const MIN_DEPOSIT_USDC = 1; // 1 USDC minimum
+export const USDC_DECIMALS = 18; // BnM uses 18 decimals
+export const MIN_DEPOSIT_USDC = 1; // 1 BnM minimum

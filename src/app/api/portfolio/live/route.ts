@@ -128,17 +128,17 @@ async function fetchDefiLlamaApys(): Promise<DefiLlamaResult> {
 // Contract Addresses (Arbitrum Sepolia)
 // ============================================================================
 
-const SHIELD_VAULT = "0x4d0A651776F789c4a7E23563aC3110Aa63A20F7C" as const;
-const RISK_REGISTRY = "0xDd00b97Cd8Df07BbC95D9eAfb680A86358943C06" as const;
+const SHIELD_VAULT = "0xe6D20be65eA58e30eFCb8DBe677772959aAdFCd9" as const;
+const RISK_REGISTRY = "0x28B38104F3cD62EABE17E927d61DbC50B834b1B7" as const;
 
 // Known adapter addresses on Arbitrum Sepolia → proper display names.
 // Contracts return "_0xXXXX" (hex prefix) instead of their protocol name,
 // so we resolve here before falling back to the contract's name() return value.
 const KNOWN_ADAPTER_NAMES: Record<string, string> = {
-  "0x2ab8a676ca67bab1c9e78f70c48b5b04eb288d8a": "AaveAdapter",
-  "0x7816d0b6399cfa2e81ae3c07721ee43cb3b3c6c8": "CompoundAdapter",
-  "0x9d64139fed95cfad4d606aa8f145351068cf36ac": "MorphoAdapter",
-  "0xf6b7306abe85b6b7236c4e5e79443773ef13b4f3": "YieldMaxAdapter",
+  "0x8bdcad76328f00ab9a0712e8292fc1a1adcaa82a": "AaveAdapter",
+  "0xf2f0fa5fc187cfe6538d72c86cccada996956aaa": "CompoundAdapter",
+  "0x3f5b509a1d59814567fe370a471463c3aea38400": "MorphoAdapter",
+  "0xafd04a3a43a8b8d4523e3f1031071d1d378d8096": "YieldMaxAdapter",
 };
 
 // We no longer hardcode ADAPTERS here, we fetch them dynamically from ShieldVault!
@@ -365,8 +365,8 @@ export async function GET(request: NextRequest) {
     // Filter only active pools and build the adapter list dynamically
     const activeAdapters = poolAllocations.filter((p) => p.isActive).map(p => p.adapter);
 
-    // Total balance in USDC (6 decimals)
-    const totalValueUsd = Number(formatUnits(userBalance, 6));
+    // Total balance in BnM (18 decimals)
+    const totalValueUsd = Number(formatUnits(userBalance, 18));
 
     // Phase 2: Fetch adapter specific details (balance, APY, health, name, risk) & DeFiLlama  
     const adapterCalls = activeAdapters.flatMap((addr) => [
@@ -471,7 +471,7 @@ export async function GET(request: NextRequest) {
 
       // Principal proportional to this adapter's allocation
       const principalUsd = userPosition
-        ? Number(formatUnits(userPosition.totalDeposited, 6)) * allocation / 100
+        ? Number(formatUnits(userPosition.totalDeposited, 18)) * allocation / 100
         : 0;
 
       const accruedYield = Math.max(0, userAdapterBalance - principalUsd);
@@ -535,7 +535,7 @@ export async function GET(request: NextRequest) {
       totalChangeDirection: totalChange.changeDirection,
       adapters,
       riskScores,
-      totalAssets: Number(formatUnits(totalAssets, 6)),
+      totalAssets: Number(formatUnits(totalAssets, 18)),
       lastUpdated: new Date().toISOString(),
     };
 

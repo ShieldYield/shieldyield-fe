@@ -201,12 +201,12 @@ export default function VaultActions({ onSuccess }: { onSuccess?: () => void }) 
                                                 ? 'bg-red-500/10 text-red-400'
                                                 : 'bg-cyan-500/10 text-cyan-400 hover:bg-cyan-500/20 active:scale-95'
                                             }`}
-                                        title="Claim 10,000 test USDC for demo purposes"
+                                        title="Get test BnM tokens from Chainlink Faucet"
                                     >
                                         {(isFaucetPending || isFaucetConfirming) && (
                                             <span className="w-3 h-3 border-2 border-current border-t-transparent rounded-full animate-spin" />
                                         )}
-                                        {faucetStep === 'success' ? 'Claimed ✓' : faucetError ? 'Failed' : 'Claim Test USDC'}
+                                        {faucetStep === 'success' ? 'Opened ✓' : faucetError ? 'Failed' : 'Get Test BnM'}
                                     </button>
                                 )}
                             </div>

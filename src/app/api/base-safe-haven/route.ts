@@ -4,12 +4,12 @@ import { baseSepolia } from "viem/chains";
 
 // Base Sepolia deployed contract addresses (with depositFor support)
 const BASE_ADDRESSES = {
-    shieldVault:     "0x61A40b866cAE11aC17986FbEeb9c700f4c8F088B" as Address,
-    shieldBridge:    "0xE665F22b138191Cf6B9C534f8206D05A09d016b5" as Address,
-    aaveAdapter:     "0xe7A9d43cb9D751995E18884D58a6D5fE53B479F2" as Address,
-    compoundAdapter: "0xF32aF905922fbCcF5fCe4B843115F70fE28C6c34" as Address,
-    morphoAdapter:   "0xe99FeF6a4670597053544F1923B6485ba9DeA27E" as Address,
-    yieldMaxAdapter: "0xC7e1F2d8B24F1740e0b7b1Bb5a7E41633BE361FA" as Address,
+    shieldVault:     "0x220b8e0733e0E1eD90a44d9Bd81D558D685c0fE0" as Address,
+    shieldBridge:    "0x4B8381d50A8D609A43060Fc19692289870afC80f" as Address,
+    aaveAdapter:     "0xc8c06751384601300AfA12BeE12888f6dAf4A167" as Address,
+    compoundAdapter: "0xc66627589c2d1Eeee420c1C2F4918747f5906106" as Address,
+    morphoAdapter:   "0x35E683F8bc9Bf0ff63256F65bAb0dD62604ED85D" as Address,
+    yieldMaxAdapter: "0xf7Bf7ddC5d261b60C25a291134FA1312912A599E" as Address,
 };
 
 const ADAPTER_ABI = [
@@ -66,9 +66,9 @@ async function readAdapter(name: string, address: Address) {
         return {
             name,
             address,
-            balance: Number(balance) / 1e6,
-            principal: Number(principal) / 1e6,
-            accruedYield: Number(accruedYield) / 1e6,
+            balance: Number(balance) / 1e18,
+            principal: Number(principal) / 1e18,
+            accruedYield: Number(accruedYield) / 1e18,
             apy: Number(apy) / 100,
             isHealthy: isHealthy as boolean,
         };
