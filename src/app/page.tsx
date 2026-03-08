@@ -303,21 +303,6 @@ export default function Home() {
                         </div>
                       </div>
 
-                      {ccipPending > 0 && (
-                        <div className="flex items-center gap-2 px-3 py-1.5 border border-emerald-500/30 rounded-xl relative overflow-hidden bg-emerald-500/10 transition-colors">
-                          <div className="flex items-center justify-center w-6 h-6 rounded bg-emerald-500/20 text-xs">🛡️</div>
-                          <div className="flex flex-col relative z-10">
-                            <span className="text-[10px] text-emerald-400 uppercase font-medium leading-none inline-flex items-center gap-1.5">
-                              Success: Shielding
-                              <span className="w-1.5 h-1.5 bg-emerald-400 rounded-full animate-pulse" />
-                            </span>
-                            <span className="text-sm font-mono font-medium text-emerald-400 leading-tight">
-                              ${ccipPending.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 4 })}
-                            </span>
-                          </div>
-                        </div>
-                      )}
-
                       <div className={`flex items-center gap-2 px-3 py-1.5 rounded-xl border transition-colors ${baseBalance > 0 ? "bg-emerald-500/10 border-emerald-500/30" : "bg-zinc-800/40 border-zinc-700/40"}`}>
                         <div className={`flex items-center justify-center w-6 h-6 rounded text-xs ${baseBalance > 0 ? "bg-emerald-500/20 shadow-sm shadow-emerald-500/20" : "bg-zinc-700/50"}`}>🛡️</div>
                         <div className="flex flex-col">

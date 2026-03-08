@@ -1,9 +1,9 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { useWriteContract, useWaitForTransactionReceipt, useAccount } from 'wagmi';
-
-const CCIP_BNM_ADDRESS = '0xA8C0c11bf64AF62CDCA6f93D3769B88BdD7cb93D';
+import { useWriteContract, useWaitForTransactionReceipt, useAccount, usePublicClient } from 'wagmi';
+import { MOCK_USDC_ADDRESS, BASE_USDC_ADDRESS } from '../contracts';
+import { baseSepolia } from 'viem/chains';
 
 const MOCK_TOKEN_ABI = [
     {
@@ -18,71 +18,62 @@ const MOCK_TOKEN_ABI = [
 export type FaucetStep = 'idle' | 'depositing' | 'waitingDeposit' | 'success' | 'error';
 
 export function useFaucet() {
-    const { address: userAddress } = useAccount();
+    const { address: userAddress, chainId } = useAccount();
     const [step, setStep] = useState<FaucetStep>('idle');
     const [error, setError] = useState<string | null>(null);
+    const publicClient = usePublicClient();
+
+    // Dynamic token address based on chain
+    const tokenAddress = chainId === baseSepolia.id ? BASE_USDC_ADDRESS : MOCK_USDC_ADDRESS;
 
     const {
-        writeContract,
-        data: hash,
+        writeContractAsync,
         error: txError,
         isPending: isConfirming
     } = useWriteContract();
 
-    const {
-        isLoading: isWaiting,
-        isSuccess: hasTxSucceeded,
-        error: receiptError
-    } = useWaitForTransactionReceipt({ hash });
-
-    const claim = useCallback(() => {
+    const claim = useCallback(async () => {
         try {
             setError(null);
             setStep('depositing');
-            if (!userAddress) throw new Error("Wallet not connected");
+            if (!userAddress || !publicClient) throw new Error("Wallet not connected");
 
-            writeContract({
-                address: CCIP_BNM_ADDRESS,
-                abi: MOCK_TOKEN_ABI,
-                functionName: 'drip',
-                args: [userAddress], // send tokens to the connected user
-                maxFeePerGas: BigInt(500000000), // 0.5 gwei - safe margin for arbitrum sepolia base fee spikes
+            console.log("🚀 Starting Multi-Mint (10 USDC)...");
+            
+            // Get current nonce to send transactions in order
+            let currentNonce = await publicClient.getTransactionCount({ 
+                address: userAddress, 
+                blockTag: 'pending' 
             });
-        } catch (err: any) {
-            console.error('Faucet catch error:', err);
-            setError(err?.message || 'Failed to submit transaction');
-            setStep('error');
-        }
-    }, [writeContract]);
 
-    // Handle contract write errors (e.g. user rejected)
-    useEffect(() => {
-        if (txError) {
-            console.error('Faucet TX Error:', txError);
-            setError(txError.message || 'Transaction rejected or failed');
-            setStep('error');
-        }
-    }, [txError]);
+            // Loop 10 times to get 10 USDC (since each drip = 1 USDC)
+            const txs = [];
+            for (let i = 0; i < 10; i++) {
+                console.log(`Submitting drip ${i+1}/10...`);
+                const hash = await writeContractAsync({
+                    address: tokenAddress,
+                    abi: MOCK_TOKEN_ABI,
+                    functionName: 'drip',
+                    args: [userAddress], 
+                    nonce: currentNonce++,
+                    maxFeePerGas: BigInt(500000000), // 0.5 gwei
+                });
+                txs.push(hash);
+            }
 
-    // Handle receipt errors (transaction reverted on chain)
-    useEffect(() => {
-        if (receiptError) {
-            console.error('Faucet Receipt Error:', receiptError);
-            setError(receiptError.message || 'Transaction reverted');
-            setStep('error');
-        }
-    }, [receiptError]);
-
-    // Update steps based on tx state
-    useEffect(() => {
-        if (isConfirming) {
-            setStep('depositing');
-        } else if (isWaiting) {
             setStep('waitingDeposit');
-        } else if (hasTxSucceeded) {
+            
+            // Wait for all transactions to complete
+            await Promise.all(txs.map(hash => publicClient.waitForTransactionReceipt({ hash })));
+            
             setStep('success');
+            console.log("✅ All 10 USDC minted successfully!");
+        } catch (err: any) {
+            console.error('Faucet multi-mint error:', err);
+            setError(err?.shortMessage || err?.message || 'Failed to submit transactions');
+            setStep('error');
         }
-    }, [isConfirming, isWaiting, hasTxSucceeded]);
+    }, [writeContractAsync, userAddress, tokenAddress, publicClient]);
 
     const reset = useCallback(() => {
         setStep('idle');
@@ -94,8 +85,7 @@ export function useFaucet() {
         step,
         error,
         reset,
-        isPending: isConfirming || isWaiting, // Busy state
+        isPending: step === 'depositing' || step === 'waitingDeposit',
         isConfirming: isConfirming,
     };
 }
-

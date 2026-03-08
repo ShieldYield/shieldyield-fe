@@ -4,10 +4,12 @@ import { useState, useEffect } from 'react';
 import { useAccount } from 'wagmi';
 import { parseUnits } from 'viem';
 import { motion, AnimatePresence } from 'framer-motion';
-import { useVaultData, useDeposit, useWithdraw } from '../../lib/hooks/useShieldVault';
+import { useVaultData, useDeposit, useWithdraw, useClaimCrossChainFunds } from '../../lib/hooks/useShieldVault';
 import { useFaucet } from '../../lib/hooks/useFaucet';
 import { useVaultEstimator, useActivePoolCount } from '../../lib/hooks/useVaultEstimator';
 import { USDC_DECIMALS, MIN_DEPOSIT_USDC } from '../../lib/contracts';
+import { useSwitchChain } from 'wagmi';
+import { arbitrumSepolia, baseSepolia } from 'viem/chains';
 
 // ============================================================================
 // VaultActions — Deposit / Withdraw Panel
@@ -16,14 +18,18 @@ import { USDC_DECIMALS, MIN_DEPOSIT_USDC } from '../../lib/contracts';
 type Tab = 'deposit' | 'withdraw';
 
 export default function VaultActions({ onSuccess }: { onSuccess?: () => void }) {
-    const { isConnected } = useAccount();
+    const { isConnected, chainId } = useAccount();
+    const { switchChain } = useSwitchChain();
     const [activeTab, setActiveTab] = useState<Tab>('deposit');
     const [amount, setAmount] = useState('');
 
-    const { usdcBalance, totalShares, totalSharesRaw, vaultBalance, refetch } = useVaultData();
+    const { usdcBalance, totalShares, vaultBalance, unclaimedFunds, refetch } = useVaultData();
     const { deposit, step: depositStep, error: depositError, reset: resetDeposit, isPending: isDepositPending, isConfirming: isDepositConfirming } = useDeposit();
     const { withdraw, step: withdrawStep, error: withdrawError, reset: resetWithdraw, isPending: isWithdrawPending, isConfirming: isWithdrawConfirming } = useWithdraw();
+    const { claim: claimFunds, step: claimStep, error: claimError, reset: resetClaim, isPending: isClaimPending, isConfirming: isClaimConfirming } = useClaimCrossChainFunds();
     const { claim: claimFaucet, step: faucetStep, error: faucetError, reset: resetFaucet, isPending: isFaucetPending, isConfirming: isFaucetConfirming } = useFaucet();
+
+    const isBase = chainId === baseSepolia.id;
 
     // Estimator hooks
     const { estimatedShares, estimatedUsdc, isLoading: isEstimating } = useVaultEstimator(amount, activeTab);
@@ -34,21 +40,21 @@ export default function VaultActions({ onSuccess }: { onSuccess?: () => void }) 
         setAmount('');
         resetDeposit();
         resetWithdraw();
-    }, [activeTab, resetDeposit, resetWithdraw]);
+        resetClaim();
+    }, [activeTab, resetDeposit, resetWithdraw, resetClaim]);
 
     // Refresh data on success
     useEffect(() => {
-        if (depositStep === 'success' || withdrawStep === 'success' || (faucetStep as string) === 'success') {
+        if (depositStep === 'success' || withdrawStep === 'success' || claimStep === 'success' || (faucetStep as string) === 'success') {
             refetch();
             onSuccess?.();
 
-            // Auto-reset faucet UI state after a few seconds
             if ((faucetStep as string) === 'success') {
                 const timer = setTimeout(() => resetFaucet(), 3000);
                 return () => clearTimeout(timer);
             }
         }
-    }, [depositStep, withdrawStep, faucetStep, refetch, onSuccess, resetFaucet]);
+    }, [depositStep, withdrawStep, claimStep, faucetStep, refetch, onSuccess, resetFaucet]);
 
     if (!isConnected) return null;
 
@@ -62,6 +68,8 @@ export default function VaultActions({ onSuccess }: { onSuccess?: () => void }) 
     const canWithdraw = numericAmount > 0 && numericAmount <= totalShares;
     const isWithdrawBusy = isWithdrawPending || isWithdrawConfirming || (withdrawStep !== 'idle' && withdrawStep !== 'success' && withdrawStep !== 'error');
 
+    const isClaimBusy = isClaimPending || isClaimConfirming || (claimStep !== 'idle' && claimStep !== 'success' && claimStep !== 'error');
+
     const handleDeposit = () => {
         if (!canDeposit) return;
         deposit(numericAmount);
@@ -69,7 +77,6 @@ export default function VaultActions({ onSuccess }: { onSuccess?: () => void }) 
 
     const handleWithdraw = () => {
         if (!canWithdraw) return;
-        // Convert input amount to raw bigint (18 decimals for USDC-BnM based shares)
         const sharesRaw = parseUnits(numericAmount.toString(), USDC_DECIMALS);
         withdraw(sharesRaw);
     };
@@ -106,15 +113,60 @@ export default function VaultActions({ onSuccess }: { onSuccess?: () => void }) 
 
     return (
         <div className="bg-zinc-900/60 border border-zinc-800 rounded-3xl p-6">
-            {/* Header with Active Pools Badge */}
+            {/* Header with Active Pools Badge & Network Switcher */}
             <div className="flex items-center justify-between mb-4">
-                <h3 className="text-sm font-medium text-zinc-300 uppercase tracking-widest">Vault Actions</h3>
-                {activePoolCount !== null && (
+                <div className="flex flex-col gap-1">
+                    <h3 className="text-sm font-medium text-zinc-300 uppercase tracking-widest">Vault Actions</h3>
+                    <div className="flex items-center gap-2">
+                        <span className={`w-1.5 h-1.5 rounded-full ${isBase ? 'bg-emerald-400' : 'bg-blue-400'}`} />
+                        <span className="text-[10px] text-zinc-500 font-medium uppercase tracking-tight">
+                            Network: {isBase ? 'Base Sepolia' : 'Arbitrum Sepolia'}
+                        </span>
+                    </div>
+                </div>
+                {activePoolCount !== null && !isBase && (
                     <span className="text-[10px] font-medium uppercase tracking-widest px-2.5 py-1 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
                         {activePoolCount} Active Pool{activePoolCount !== 1 ? 's' : ''}
                     </span>
                 )}
+                {isBase && (
+                    <span className="text-[10px] font-medium uppercase tracking-widest px-2.5 py-1 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                        Safe Haven Mode
+                    </span>
+                )}
             </div>
+
+            {/* Unclaimed Funds Alert */}
+            {unclaimedFunds > 0 && (
+                <div className="mb-6 p-4 rounded-2xl bg-cyan-500/10 border border-cyan-500/30 flex flex-col gap-3">
+                    <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                            <span className="text-lg">🎁</span>
+                            <div className="flex flex-col">
+                                <span className="text-xs font-bold text-cyan-400 uppercase tracking-tight">Bridged Funds Arrived!</span>
+                                <span className="text-[10px] text-zinc-400">You have funds waiting to be claimed on Base.</span>
+                            </div>
+                        </div>
+                        <span className="text-sm font-mono font-bold text-zinc-100">${unclaimedFunds.toFixed(2)}</span>
+                    </div>
+                    {!isBase ? (
+                        <button
+                            onClick={() => switchChain?.({ chainId: baseSepolia.id })}
+                            className="w-full py-2 bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-400 text-[10px] font-bold uppercase tracking-widest rounded-lg border border-cyan-500/20 transition-all"
+                        >
+                            Switch to Base to Claim
+                        </button>
+                    ) : (
+                        <button
+                            onClick={() => claimFunds()}
+                            disabled={isClaimBusy}
+                            className="w-full py-2 bg-cyan-500 hover:bg-cyan-400 text-zinc-950 text-[10px] font-bold uppercase tracking-widest rounded-lg transition-all shadow-lg shadow-cyan-500/20"
+                        >
+                            {isClaimBusy ? 'Claiming...' : 'Claim to Base Vault'}
+                        </button>
+                    )}
+                </div>
+            )}
 
             {/* Tab Switcher */}
             <div className="flex gap-1 bg-zinc-800/60 rounded-xl p-1 mb-6">
@@ -190,7 +242,6 @@ export default function VaultActions({ onSuccess }: { onSuccess?: () => void }) 
                                     <span className="text-xs text-zinc-400">{MIN_DEPOSIT_USDC} USDC</span>
                                 </div>
 
-                                {/* Show Faucet button if balance is very low (e.g., < 10 USDC) */}
                                 {usdcBalance < 10 && (
                                     <button
                                         onClick={() => claimFaucet()}
@@ -201,20 +252,20 @@ export default function VaultActions({ onSuccess }: { onSuccess?: () => void }) 
                                                 ? 'bg-red-500/10 text-red-400'
                                                 : 'bg-cyan-500/10 text-cyan-400 hover:bg-cyan-500/20 active:scale-95'
                                             }`}
-                                        title="Mint test CCIP-BnM tokens directly to your wallet"
+                                        title={`Mint test BnM tokens directly to your wallet on ${isBase ? 'Base' : 'Arbitrum'}`}
                                     >
                                         {(isFaucetPending || isFaucetConfirming) && (
                                             <span className="w-3 h-3 border-2 border-current border-t-transparent rounded-full animate-spin" />
                                         )}
                                         {(faucetStep as string) === 'success'
-                                            ? 'Minted 1 BnM ✓'
+                                            ? 'Minted 10 USDC ✓'
                                             : faucetError
                                                 ? 'Mint Failed'
                                                 : isFaucetConfirming
                                                     ? 'Confirm in Wallet...'
                                                     : isFaucetPending
-                                                        ? 'Minting BnM...'
-                                                        : 'Mint 1 Test BnM'}
+                                                        ? 'Minting USDC...'
+                                                        : 'Mint 10 USDC'}
                                     </button>
                                 )}
                             </div>
@@ -266,21 +317,23 @@ export default function VaultActions({ onSuccess }: { onSuccess?: () => void }) 
                         <button
                             id="vault-deposit-btn"
                             onClick={handleDeposit}
-                            disabled={!canDeposit || isDepositBusy || depositStep === 'success'}
+                            disabled={!canDeposit || isDepositBusy || depositStep === 'success' || isBase}
                             className={`w-full py-3.5 rounded-xl text-sm font-medium transition-all duration-200 ${depositStep === 'success'
                                 ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
                                 : depositStep === 'error'
                                     ? 'bg-red-500/20 text-red-400 border border-red-500/30'
-                                    : canDeposit && !isDepositBusy
-                                        ? 'bg-cyan-500 hover:bg-cyan-400 text-zinc-950 shadow-lg shadow-cyan-500/20'
-                                        : 'bg-zinc-800 text-zinc-500 cursor-not-allowed'
+                                    : isBase
+                                        ? 'bg-zinc-800 text-zinc-600 cursor-not-allowed'
+                                        : canDeposit && !isDepositBusy
+                                            ? 'bg-cyan-500 hover:bg-cyan-400 text-zinc-950 shadow-lg shadow-cyan-500/20'
+                                            : 'bg-zinc-800 text-zinc-500 cursor-not-allowed'
                                 }`}
                         >
                             <span className="flex items-center justify-center gap-2">
                                 {isDepositBusy && (
                                     <span className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
                                 )}
-                                {getDepositStepLabel()}
+                                {isBase ? 'Deposits Disabled on Base' : getDepositStepLabel()}
                             </span>
                         </button>
                     ) : (
@@ -306,11 +359,18 @@ export default function VaultActions({ onSuccess }: { onSuccess?: () => void }) 
                         </button>
                     )}
 
-                    {/* Error Message */}
-                    {(depositError || withdrawError) && (
+                    {/* Network Hint */}
+                    {!isBase && totalShares === 0 && vaultBalance === 0 && (
+                        <p className="mt-4 text-[10px] text-center text-zinc-600">
+                            Check <span className="text-zinc-400 font-medium">Base Safe Haven</span> if you expected bridged funds.
+                        </p>
+                    )}
+
+                    {/* Error Messages */}
+                    {(depositError || withdrawError || claimError) && (
                         <div className="mt-3 p-3 bg-red-500/10 border border-red-500/20 rounded-lg">
                             <p className="text-xs text-red-400 break-all">
-                                {depositError || withdrawError}
+                                {depositError || withdrawError || claimError}
                             </p>
                             <button
                                 onClick={activeTab === 'deposit' ? resetDeposit : resetWithdraw}
@@ -320,6 +380,7 @@ export default function VaultActions({ onSuccess }: { onSuccess?: () => void }) 
                             </button>
                         </div>
                     )}
+
 
                     {/* Deposit Step Indicator */}
                     {activeTab === 'deposit' && depositStep !== 'idle' && depositStep !== 'error' && (
