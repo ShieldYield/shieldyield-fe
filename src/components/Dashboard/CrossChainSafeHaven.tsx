@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { useAccount } from 'wagmi';
 
 interface AdapterData {
     name: string;
@@ -64,8 +65,8 @@ const PROTOCOL_ICONS: Record<string, string> = {
 };
 
 const STATUS_CONFIG: Record<string, { label: string; color: string; bgColor: string; borderColor: string; pulse: boolean }> = {
-    PENDING: { label: 'Pending', color: 'text-amber-400', bgColor: 'bg-amber-500/10', borderColor: 'border-amber-500/30', pulse: true },
-    IN_PROGRESS: { label: 'In Progress', color: 'text-cyan-400', bgColor: 'bg-cyan-500/10', borderColor: 'border-cyan-500/30', pulse: true },
+    PENDING: { label: 'Success (Bridging)', color: 'text-emerald-400', bgColor: 'bg-emerald-500/10', borderColor: 'border-emerald-500/30', pulse: true },
+    IN_PROGRESS: { label: 'Success (Executing)', color: 'text-emerald-400', bgColor: 'bg-emerald-500/10', borderColor: 'border-emerald-500/30', pulse: true },
     SUCCESS: { label: 'Completed', color: 'text-emerald-400', bgColor: 'bg-emerald-500/10', borderColor: 'border-emerald-500/30', pulse: false },
     FAILED: { label: 'Failed', color: 'text-red-400', bgColor: 'bg-red-500/10', borderColor: 'border-red-500/30', pulse: false },
     UNKNOWN: { label: 'Checking...', color: 'text-zinc-400', bgColor: 'bg-zinc-500/10', borderColor: 'border-zinc-500/30', pulse: true },
@@ -77,19 +78,24 @@ function truncateHash(hash: string): string {
 }
 
 export default function CrossChainSafeHaven() {
+    const { address: wallet } = useAccount();
     const [baseData, setBaseData] = useState<SafeHavenData | null>(null);
     const [portfolioData, setPortfolioData] = useState<PortfolioData | null>(null);
     const [bridgeStatus, setBridgeStatus] = useState<BridgeStatusData | null>(null);
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
+        if (!wallet) {
+            setLoading(false);
+            return;
+        }
+
         const fetchAll = async () => {
             try {
                 const [baseRes, portRes, bridgeRes] = await Promise.all([
-                    fetch('/api/base-safe-haven').then(r => r.ok ? r.json() : null).catch(() => null),
-                    fetch('/api/portfolio/live?wallet=0x0000000000000000000000000000000000000000')
-                        .then(r => r.ok ? r.json() : null).catch(() => null),
-                    fetch('/api/bridge-status').then(r => r.ok ? r.json() : null).catch(() => null),
+                    fetch(`/api/base-safe-haven?wallet=${wallet}`).then(r => r.ok ? r.json() : null).catch(() => null),
+                    fetch(`/api/portfolio/live?wallet=${wallet}`).then(r => r.ok ? r.json() : null).catch(() => null),
+                    fetch(`/api/bridge-status?wallet=${wallet}`).then(r => r.ok ? r.json() : null).catch(() => null),
                 ]);
                 if (baseRes) setBaseData(baseRes);
                 if (portRes) setPortfolioData(portRes);
@@ -101,7 +107,7 @@ export default function CrossChainSafeHaven() {
         fetchAll();
         const iv = setInterval(fetchAll, 15_000);
         return () => clearInterval(iv);
-    }, []);
+    }, [wallet]);
 
     const arbBalance = portfolioData?.chainBreakdown?.arbitrum ?? 0;
     const baseBalance = portfolioData?.chainBreakdown?.base ?? baseData?.totalBalance ?? 0;
@@ -141,8 +147,8 @@ export default function CrossChainSafeHaven() {
                 </div>
                 <div className="flex items-center gap-2">
                     {isCcipPending ? (
-                        <span className="text-[10px] bg-amber-500/10 text-amber-400 border border-amber-500/20 rounded-full px-2.5 py-1 font-medium animate-pulse">
-                            BRIDGING...
+                        <span className="text-[10px] bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 rounded-full px-2.5 py-1 font-medium animate-pulse">
+                            SHIELD ACTIVE
                         </span>
                     ) : hasBridged ? (
                         <span className="text-[10px] bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 rounded-full px-2.5 py-1 font-medium">
@@ -171,8 +177,8 @@ export default function CrossChainSafeHaven() {
                                     Arbitrum {arbPercent.toFixed(0)}%
                                 </span>
                                 {isCcipPending && (
-                                    <span className="flex items-center gap-1 text-amber-500/80 animate-pulse">
-                                        Pending CCIP {ccipPercent.toFixed(0)}%
+                                    <span className="flex items-center gap-1 text-emerald-400/80 animate-pulse">
+                                        Shielding in Progress {ccipPercent.toFixed(0)}%
                                     </span>
                                 )}
                                 <span className="flex items-center gap-1">
@@ -187,7 +193,7 @@ export default function CrossChainSafeHaven() {
                                 />
                                 {ccipPercent > 0 && (
                                     <div
-                                        className="h-full bg-gradient-to-r from-amber-500 to-amber-400 transition-all duration-700"
+                                        className="h-full bg-gradient-to-r from-emerald-600 to-emerald-400 transition-all duration-700 animate-pulse"
                                         style={{ width: `${ccipPercent}%` }}
                                     />
                                 )}
@@ -219,7 +225,7 @@ export default function CrossChainSafeHaven() {
                                     <div className={`w-full h-px ${hasBridged ? 'bg-gradient-to-r from-blue-500/60 via-cyan-400/80 to-emerald-500/60' : 'bg-zinc-700'}`} />
                                     {(hasBridged || isCcipPending) && (
                                         <div
-                                            className={`absolute w-2 h-2 rounded-full shadow-lg ${isCcipPending ? 'bg-amber-400 shadow-amber-400/50' : 'bg-cyan-400 shadow-cyan-400/50'}`}
+                                            className={`absolute w-2 h-2 rounded-full shadow-lg ${isCcipPending ? 'bg-emerald-400 shadow-emerald-400/50' : 'bg-cyan-400 shadow-cyan-400/50'}`}
                                             style={{
                                                 animation: 'slideRight 2s ease-in-out infinite',
                                                 left: 0,
@@ -228,13 +234,13 @@ export default function CrossChainSafeHaven() {
                                     )}
                                 </div>
                                 <div className="flex items-center gap-1">
-                                    <span className={`text-[8px] font-bold ${isCcipPending ? 'text-amber-400 animate-pulse' : 'text-cyan-500'} uppercase tracking-widest`}>
-                                        {isCcipPending ? 'IN TRANSIT' : 'CCIP'}
+                                    <span className={`text-[8px] font-bold ${isCcipPending ? 'text-emerald-400 animate-pulse' : 'text-cyan-500'} uppercase tracking-widest`}>
+                                        {isCcipPending ? 'EVACUATING' : 'CCIP'}
                                     </span>
                                     {hasBridged && !isCcipPending && <span className="w-1 h-1 rounded-full bg-cyan-400 animate-pulse" />}
                                 </div>
                                 {isCcipPending ? (
-                                    <span className="text-[9px] font-mono text-amber-400">
+                                    <span className="text-[9px] font-mono text-emerald-400">
                                         ${ccipPending.toLocaleString('en-US', { minimumFractionDigits: 2 })}
                                     </span>
                                 ) : (totalBridgeCount > 0 && (
@@ -265,9 +271,9 @@ export default function CrossChainSafeHaven() {
                         {pendingMessages.length > 0 && (
                             <div className="space-y-2 pt-1">
                                 <div className="flex items-center gap-1.5">
-                                    <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
-                                    <p className="text-[10px] text-amber-400 uppercase tracking-widest font-medium">
-                                        Active Bridge Transfers
+                                    <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                                    <p className="text-[10px] text-emerald-400 uppercase tracking-widest font-medium">
+                                        Success: Shielding in Progress
                                     </p>
                                 </div>
                                 {pendingMessages.map((msg) => {
@@ -346,12 +352,12 @@ export default function CrossChainSafeHaven() {
                                         <div className="space-y-1.5">
                                             {/* Escrow Balance */}
                                             {baseData.escrowBalance > 0.001 && (
-                                                <div className="flex items-center justify-between px-3 py-2 rounded-xl bg-amber-500/5 border border-amber-500/20">
+                                                <div className="flex items-center justify-between px-3 py-2 rounded-xl bg-emerald-500/5 border border-emerald-500/20">
                                                     <div className="flex items-center gap-1.5">
-                                                        <span className="text-xs">🌉</span>
-                                                        <span className="text-[10px] text-amber-400">Bridge Escrow</span>
+                                                        <span className="text-xs">🛡️</span>
+                                                        <span className="text-[10px] text-emerald-400">Escrow Secured</span>
                                                     </div>
-                                                    <span className="text-xs font-mono font-medium text-amber-400">
+                                                    <span className="text-xs font-mono font-medium text-emerald-400">
                                                         ${baseData.escrowBalance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 4 })}
                                                     </span>
                                                 </div>

@@ -171,6 +171,13 @@ const SHIELD_VAULT_ABI = [
     ],
   },
   {
+    name: "totalShares",
+    type: "function",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ name: "", type: "uint256" }],
+  },
+  {
     name: "getPoolAllocations",
     type: "function",
     stateMutability: "view",
@@ -340,6 +347,11 @@ export async function GET(request: NextRequest) {
         abi: SHIELD_VAULT_ABI,
         functionName: "getTotalAssets" as const,
       },
+      {
+        address: SHIELD_VAULT,
+        abi: SHIELD_VAULT_ABI,
+        functionName: "totalShares" as const,
+      },
     ];
 
     const vaultResults = await client.multicall({ contracts: vaultCalls });
@@ -353,6 +365,10 @@ export async function GET(request: NextRequest) {
       ? (vaultResults[2].result as ReadonlyArray<{ adapter: Address; tier: number; targetWeight: bigint; currentAmount: bigint; isActive: boolean }>)
       : [];
     const totalAssets = vaultResults[3].status === "success" ? (vaultResults[3].result as bigint) : 0n;
+    const totalVaultShares = vaultResults[4].status === "success" ? (vaultResults[4].result as bigint) : 0n;
+
+    const userShares = userPosition?.totalShares ?? 0n;
+    const userShareRatio = totalVaultShares > 0n ? Number(userShares) / Number(totalVaultShares) : 0;
 
     // Filter only active pools and build the adapter list dynamically
     const activeAdapters = poolAllocations.filter((p) => p.isActive).map(p => p.adapter);
@@ -513,23 +529,64 @@ export async function GET(request: NextRequest) {
     let completedBridgeMessages: BridgeMessage[] = [];
 
     try {
-      // Fetch Base balance and bridge status in parallel (no localhost fetch — uses shared module)
+      // Fetch current block to estimate user's deposit block
+      const currentBlock = await client.getBlockNumber();
+      const lastDepositTime = userPosition ? Number(userPosition.lastDepositTime) : 0;
+      
+      // Rough estimate of the block when user deposited. 
+      // Arb Sepolia generates ~4 blocks/sec. We add a buffer of 500 blocks (~2 mins).
+      const depositBlockThreshold = lastDepositTime > 0
+        ? Number(currentBlock) - Math.floor((Date.now() / 1000 - lastDepositTime) * 4) - 500
+        : Number(currentBlock);
+
+      // Fetch Base balance and bridge status in parallel
       const [baseRes, bridgeData] = await Promise.all([
         fetch(`http://localhost:3000/api/base-safe-haven?wallet=${wallet}`, { signal: AbortSignal.timeout(5000) }).catch(() => null),
         fetchBridgeStatus({ wallet: wallet as string, noCache: isNoCache }).catch(() => null),
       ]);
+      
       if (baseRes?.ok) {
         const baseData = await baseRes.json();
-        // totalBalance precisely represents the user's specific available + claimable funds
         baseSepoliaBalance = baseData.totalBalance ?? 0;
         unclaimedCrossChainFunds = baseData.unclaimedCrossChainFunds ?? 0;
       }
+      
       if (bridgeData) {
-        pendingBridgeAmount = bridgeData.totalPendingAmount;
-        pendingBridgeMessages = bridgeData.pendingMessages;
-        completedBridgeMessages = bridgeData.completedMessages;
+        // FILTER: Only show system-initiated messages if:
+        // 1. The user actually has a stake (shares > 0).
+        // 2. The message occurred AFTER the user's latest deposit (using block threshold).
+        
+        const isUserActive = userShares > 0n;
+
+        const processMessage = (msg: BridgeMessage) => {
+          const isSystem = msg.sender.toLowerCase() === SHIELD_VAULT.toLowerCase();
+          
+          if (isSystem) {
+             // Block old system messages or if user has no stake
+             if (!isUserActive || msg.sourceBlockNumber < depositBlockThreshold) return null;
+          }
+          
+          const userAmount = isSystem ? (msg.amount * userShareRatio) : msg.amount;
+          if (userAmount < 0.000001) return null;
+
+          return { ...msg, amount: userAmount };
+        };
+
+        const filteredPending = bridgeData.pendingMessages
+          .map(processMessage)
+          .filter((m): m is BridgeMessage => m !== null);
+
+        const filteredCompleted = bridgeData.completedMessages
+          .map(processMessage)
+          .filter((m): m is BridgeMessage => m !== null);
+
+        pendingBridgeAmount = filteredPending.reduce((sum, m) => sum + m.amount, 0);
+        pendingBridgeMessages = filteredPending;
+        completedBridgeMessages = filteredCompleted;
       }
-    } catch { /* Base Sepolia / bridge-status unreachable — show 0 */ }
+    } catch (err) { 
+      console.error("[portfolio/live] Bridge/Base fetch failed:", err);
+    }
 
     const globalTotalValueUsd = totalValueUsd + baseSepoliaBalance + pendingBridgeAmount + unclaimedCrossChainFunds;
 

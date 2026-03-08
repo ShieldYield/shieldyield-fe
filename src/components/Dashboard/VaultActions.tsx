@@ -69,7 +69,7 @@ export default function VaultActions({ onSuccess }: { onSuccess?: () => void }) 
 
     const handleWithdraw = () => {
         if (!canWithdraw) return;
-        // Convert shares amount to raw bigint (6 decimals for USDC-based shares)
+        // Convert input amount to raw bigint (18 decimals for USDC-BnM based shares)
         const sharesRaw = parseUnits(numericAmount.toString(), USDC_DECIMALS);
         withdraw(sharesRaw);
     };

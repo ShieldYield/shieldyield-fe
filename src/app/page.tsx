@@ -304,14 +304,14 @@ export default function Home() {
                       </div>
 
                       {ccipPending > 0 && (
-                        <div className="flex items-center gap-2 px-3 py-1.5 border border-amber-500/30 rounded-xl relative overflow-hidden bg-amber-500/10 transition-colors">
-                          <div className="flex items-center justify-center w-6 h-6 rounded bg-amber-500/20 text-xs">🌉</div>
+                        <div className="flex items-center gap-2 px-3 py-1.5 border border-emerald-500/30 rounded-xl relative overflow-hidden bg-emerald-500/10 transition-colors">
+                          <div className="flex items-center justify-center w-6 h-6 rounded bg-emerald-500/20 text-xs">🛡️</div>
                           <div className="flex flex-col relative z-10">
-                            <span className="text-[10px] text-amber-500/80 uppercase font-medium leading-none inline-flex items-center gap-1.5">
-                              Bridging
-                              <span className="w-1.5 h-1.5 bg-amber-400 rounded-full animate-pulse" />
+                            <span className="text-[10px] text-emerald-400 uppercase font-medium leading-none inline-flex items-center gap-1.5">
+                              Success: Shielding
+                              <span className="w-1.5 h-1.5 bg-emerald-400 rounded-full animate-pulse" />
                             </span>
-                            <span className="text-sm font-mono font-medium text-amber-400 leading-tight">
+                            <span className="text-sm font-mono font-medium text-emerald-400 leading-tight">
                               ${ccipPending.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 4 })}
                             </span>
                           </div>
@@ -387,8 +387,8 @@ export default function Home() {
                             Arbitrum {arbPercent.toFixed(0)}%
                           </span>
                           {isCcipPending && (
-                            <span className="flex items-center gap-2 text-amber-500/80 animate-pulse">
-                              Bridging {ccipPercent.toFixed(0)}%
+                            <span className="flex items-center gap-2 text-emerald-400 animate-pulse">
+                              Shielding in Progress {ccipPercent.toFixed(0)}%
                             </span>
                           )}
                           <span className="flex items-center gap-2">
@@ -403,7 +403,7 @@ export default function Home() {
                           />
                           {ccipPercent > 0 && (
                             <div
-                              className="h-full bg-gradient-to-r from-amber-500 to-amber-400 transition-all duration-700"
+                              className="h-full bg-gradient-to-r from-emerald-600 to-emerald-400 transition-all duration-700 animate-pulse"
                               style={{ width: `${ccipPercent}%` }}
                             />
                           )}
@@ -435,7 +435,7 @@ export default function Home() {
                             <div className={`w-full h-px ${hasBridged ? 'bg-gradient-to-r from-blue-500/60 via-cyan-400/80 to-emerald-500/60' : 'bg-zinc-700'}`} />
                             {(hasBridged || isCcipPending) && (
                               <div
-                                className={`absolute w-3 h-3 rounded-full shadow-lg ${isCcipPending ? 'bg-amber-400 shadow-[0_0_12px_rgba(251,191,36,0.5)]' : 'bg-cyan-400 shadow-[0_0_12px_rgba(34,211,238,0.5)]'}`}
+                                className={`absolute w-3 h-3 rounded-full shadow-lg ${isCcipPending ? 'bg-emerald-400 shadow-[0_0_12px_rgba(52,211,153,0.5)]' : 'bg-cyan-400 shadow-[0_0_12px_rgba(34,211,238,0.5)]'}`}
                                 style={{
                                   animation: 'slideRight 2s ease-in-out infinite',
                                   left: 0,
@@ -444,13 +444,13 @@ export default function Home() {
                             )}
                           </div>
                           <div className="flex items-center gap-1.5">
-                            <span className={`text-[11px] font-bold ${isCcipPending ? 'text-amber-400 animate-pulse' : 'text-cyan-500'} uppercase tracking-widest`}>
-                              {isCcipPending ? 'IN TRANSIT' : 'CCIP'}
+                            <span className={`text-[11px] font-bold ${isCcipPending ? 'text-emerald-400 animate-pulse' : 'text-cyan-500'} uppercase tracking-widest`}>
+                              {isCcipPending ? 'EVACUATING' : 'CCIP'}
                             </span>
                             {hasBridged && !isCcipPending && <span className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse" />}
                           </div>
                           {isCcipPending && (
-                            <span className="text-xs font-mono text-amber-400 font-medium bg-amber-500/10 px-2.5 py-1 rounded-md border border-amber-500/20">
+                            <span className="text-xs font-mono text-emerald-400 font-medium bg-emerald-500/10 px-2.5 py-1 rounded-md border border-emerald-500/20">
                               ${ccipPending.toLocaleString('en-US', { minimumFractionDigits: 2 })}
                             </span>
                           )}
@@ -490,30 +490,30 @@ export default function Home() {
 
                       {pendingMessages.length > 0 ? (
                         <div className="space-y-3 flex-1">
-                          {pendingMessages.map((msg) => (
+                          {pendingMessages.map((msg: any) => (
                             <a
                               key={msg.messageId}
                               href={msg.ccipExplorerUrl}
                               target="_blank"
                               rel="noopener noreferrer"
-                              className="block px-5 py-4 rounded-xl bg-amber-500/10 border border-amber-500/30 hover:bg-amber-500/20 hover:border-amber-500/50 transition-all group"
+                              className="block px-5 py-4 rounded-xl bg-emerald-500/10 border border-emerald-500/30 hover:bg-emerald-500/20 hover:border-emerald-500/50 transition-all group"
                             >
                               <div className="flex items-center justify-between mb-3">
                                 <div className="flex items-center gap-3">
-                                  <span className="w-2.5 h-2.5 rounded-full bg-amber-400 animate-pulse shadow-[0_0_8px_rgba(251,191,36,0.6)]" />
-                                  <span className="text-xs font-medium text-amber-400 uppercase tracking-wider">
-                                    IN PROGRESS
+                                  <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse shadow-[0_0_8px_rgba(52,211,153,0.6)]" />
+                                  <span className="text-xs font-medium text-emerald-400 uppercase tracking-wider">
+                                    SUCCESS: SHIELDING
                                   </span>
                                 </div>
-                                <span className="text-base font-mono font-medium text-amber-400">
+                                <span className="text-base font-mono font-medium text-emerald-400">
                                   ${msg.amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 4 })}
                                 </span>
                               </div>
                               <div className="flex items-center justify-between">
-                                <span className="font-mono text-[11px] text-amber-500/80 bg-amber-500/10 px-2.5 py-1 rounded w-fit border border-amber-500/20">
+                                <span className="font-mono text-[11px] text-emerald-500/80 bg-emerald-500/10 px-2.5 py-1 rounded w-fit border border-emerald-500/20">
                                   ID: {msg.messageId.slice(0, 10)}...{msg.messageId.slice(-6)}
                                 </span>
-                                <span className="text-[11px] text-amber-500 font-medium flex items-center gap-1 group-hover:translate-x-1 transition-transform">
+                                <span className="text-[11px] text-emerald-400 font-medium flex items-center gap-1 group-hover:translate-x-1 transition-transform">
                                   Track Transfer →
                                 </span>
                               </div>
@@ -607,9 +607,9 @@ export default function Home() {
                               <span className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-tighter ${
                                 msg.status === 'SUCCESS' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 
                                 msg.status === 'FAILED' ? 'bg-red-500/10 text-red-400 border border-red-500/20' : 
-                                'bg-amber-500/10 text-amber-400 border border-amber-500/20 animate-pulse'
+                                'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 animate-pulse'
                               }`}>
-                                {msg.status}
+                                {msg.status === 'PENDING' || msg.status === 'IN_PROGRESS' ? 'SUCCESS: EVACUATING' : msg.status}
                               </span>
                             </td>
                             <td className="px-5 py-4 whitespace-nowrap text-right">
