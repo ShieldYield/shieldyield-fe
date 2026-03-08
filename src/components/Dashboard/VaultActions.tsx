@@ -201,12 +201,20 @@ export default function VaultActions({ onSuccess }: { onSuccess?: () => void }) 
                                                 ? 'bg-red-500/10 text-red-400'
                                                 : 'bg-cyan-500/10 text-cyan-400 hover:bg-cyan-500/20 active:scale-95'
                                             }`}
-                                        title="Get test BnM tokens from Chainlink Faucet"
+                                        title="Mint test CCIP-BnM tokens directly to your wallet"
                                     >
                                         {(isFaucetPending || isFaucetConfirming) && (
                                             <span className="w-3 h-3 border-2 border-current border-t-transparent rounded-full animate-spin" />
                                         )}
-                                        {(faucetStep as string) === 'success' ? 'Opened ✓' : faucetError ? 'Failed' : 'Get Test BnM'}
+                                        {(faucetStep as string) === 'success'
+                                            ? 'Minted 1 BnM ✓'
+                                            : faucetError
+                                                ? 'Mint Failed'
+                                                : isFaucetConfirming
+                                                    ? 'Confirm in Wallet...'
+                                                    : isFaucetPending
+                                                        ? 'Minting BnM...'
+                                                        : 'Mint 1 Test BnM'}
                                     </button>
                                 )}
                             </div>
