@@ -532,7 +532,7 @@ export async function GET(request: NextRequest) {
     // Phase 3: Fetch Base Sepolia balance for global portfolio
     let baseSepoliaBalance = 0;
     try {
-      const baseRes = await fetch('http://localhost:3000/api/base-safe-haven', { signal: AbortSignal.timeout(3000) });
+      const baseRes = await fetch(`http://localhost:3000/api/base-safe-haven?wallet=${wallet}`, { signal: AbortSignal.timeout(3000) });
       if (baseRes.ok) {
         const baseData = await baseRes.json();
         baseSepoliaBalance = baseData.totalBalance ?? 0;

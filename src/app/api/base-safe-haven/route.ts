@@ -1,14 +1,14 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { createPublicClient, http, type Address, erc20Abi } from "viem";
 import { baseSepolia } from "viem/chains";
 
 // Base Sepolia deployed contract addresses (with depositFor support)
 const BASE_ADDRESSES = {
-    shieldVault:     "0x220b8e0733e0E1eD90a44d9Bd81D558D685c0fE0" as Address,
-    shieldBridge:    "0x4B8381d50A8D609A43060Fc19692289870afC80f" as Address,
-    aaveAdapter:     "0xc8c06751384601300AfA12BeE12888f6dAf4A167" as Address,
+    shieldVault: "0x220b8e0733e0E1eD90a44d9Bd81D558D685c0fE0" as Address,
+    shieldBridge: "0x4B8381d50A8D609A43060Fc19692289870afC80f" as Address,
+    aaveAdapter: "0xc8c06751384601300AfA12BeE12888f6dAf4A167" as Address,
     compoundAdapter: "0xc66627589c2d1Eeee420c1C2F4918747f5906106" as Address,
-    morphoAdapter:   "0x35E683F8bc9Bf0ff63256F65bAb0dD62604ED85D" as Address,
+    morphoAdapter: "0x35E683F8bc9Bf0ff63256F65bAb0dD62604ED85D" as Address,
     yieldMaxAdapter: "0xf7Bf7ddC5d261b60C25a291134FA1312912A599E" as Address,
 };
 
@@ -50,6 +50,16 @@ const SHIELD_BRIDGE_ABI = [
     },
 ] as const;
 
+const SHIELD_VAULT_ABI = [
+    {
+        name: "getUserBalance",
+        type: "function",
+        stateMutability: "view",
+        inputs: [{ name: "user", type: "address" }],
+        outputs: [{ name: "balance", type: "uint256" }],
+    },
+] as const;
+
 const client = createPublicClient({
     chain: baseSepolia,
     transport: http("https://sepolia.base.org"),
@@ -77,12 +87,14 @@ async function readAdapter(name: string, address: Address) {
     }
 }
 
-export async function GET() {
+export async function GET(request: NextRequest) {
+    const wallet = request.nextUrl.searchParams.get("wallet");
+
     try {
         const [aave, compound, morpho, yieldMax, bridgeCount, escrowBalanceRaw] = await Promise.all([
-            readAdapter("AaveAdapter",     BASE_ADDRESSES.aaveAdapter),
+            readAdapter("AaveAdapter", BASE_ADDRESSES.aaveAdapter),
             readAdapter("CompoundAdapter", BASE_ADDRESSES.compoundAdapter),
-            readAdapter("MorphoAdapter",   BASE_ADDRESSES.morphoAdapter),
+            readAdapter("MorphoAdapter", BASE_ADDRESSES.morphoAdapter),
             readAdapter("YieldMaxAdapter", BASE_ADDRESSES.yieldMaxAdapter),
             client.readContract({
                 address: BASE_ADDRESSES.shieldBridge,
@@ -99,7 +111,27 @@ export async function GET() {
 
         const escrowBalance = Number(escrowBalanceRaw) / 1e18;
         const adapters = [aave, compound, morpho, yieldMax];
-        const totalBalance = adapters.reduce((s, a) => s + a.balance, 0) + escrowBalance;
+
+        // Calculate global balance
+        const globalTotalBalance = adapters.reduce((s, a) => s + a.balance, 0) + escrowBalance;
+
+        let personalBalance = 0;
+        const isZeroAddress = wallet === "0x0000000000000000000000000000000000000000";
+        if (wallet && !isZeroAddress) {
+            try {
+                const balanceRaw = await client.readContract({
+                    address: BASE_ADDRESSES.shieldVault,
+                    abi: SHIELD_VAULT_ABI,
+                    functionName: "getUserBalance",
+                    args: [wallet as Address],
+                });
+                personalBalance = Number(balanceRaw) / 1e18;
+            } catch (err) {
+                console.warn("[base-safe-haven] failed to read user balance:", err);
+            }
+        }
+
+        const totalBalance = (wallet && !isZeroAddress) ? personalBalance : 0;
         const primarySafeHaven = [aave, compound]; // Aave + Compound are the designated safe havens
 
         return NextResponse.json({
