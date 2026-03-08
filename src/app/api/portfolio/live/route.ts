@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createPublicClient, http, formatUnits, type Address } from "viem";
+import { createPublicClient, http, fallback, formatUnits, type Address } from "viem";
 import { arbitrumSepolia } from "viem/chains";
 import * as fs from "fs";
 import { fetchBridgeStatus, type BridgeMessage } from "@/lib/bridge-status";
@@ -36,7 +36,7 @@ interface DefiLlamaResult {
 }
 
 let defiLlamaApyCache: { data: DefiLlamaResult; timestamp: number } | null = null;
-const DEFILLAMA_CACHE_TTL_MS = 30_000;
+const DEFILLAMA_CACHE_TTL_MS = 60_000; // Increased to 60s for stability
 
 // Known lending/yield protocols (exclude LP/AMM/perps)
 const EXCLUDED_PROJECTS = new Set([
@@ -48,6 +48,7 @@ const EXCLUDED_PROJECTS = new Set([
 async function fetchDefiLlamaApys(): Promise<DefiLlamaResult> {
   const empty: DefiLlamaResult = { apys: {}, yieldMaxTopPools: [] };
 
+  // If cache is fresh, return it
   if (defiLlamaApyCache && Date.now() - defiLlamaApyCache.timestamp < DEFILLAMA_CACHE_TTL_MS) {
     return defiLlamaApyCache.data;
   }
@@ -55,9 +56,17 @@ async function fetchDefiLlamaApys(): Promise<DefiLlamaResult> {
   try {
     const res = await fetch(DEFILLAMA_POOLS_URL, {
       headers: { Accept: "application/json" },
-      cache: "no-store", // disable Next.js native cache because response > 2MB
+      cache: "no-store", 
+      // Increase timeout to 15s for large 2MB+ payload
+      signal: AbortSignal.timeout(15000),
     });
-    if (!res.ok) return empty;
+    
+    if (!res.ok) {
+      console.warn(`[portfolio/live] DeFiLlama API responded with ${res.status}`);
+      // If fetch fails but we have an old cache, use it as fallback
+      if (defiLlamaApyCache) return defiLlamaApyCache.data;
+      return empty;
+    }
 
     const { data: pools } = await res.json();
 
@@ -121,6 +130,11 @@ async function fetchDefiLlamaApys(): Promise<DefiLlamaResult> {
     return result;
   } catch (err) {
     console.error("[portfolio/live] DeFiLlama fetch failed:", err);
+    // On any fetch error (ENOTFOUND, timeout), return the last good cache if available
+    if (defiLlamaApyCache) {
+        console.log("[portfolio/live] Using stale DeFiLlama cache as fallback");
+        return defiLlamaApyCache.data;
+    }
     return empty;
   }
 }
@@ -264,7 +278,7 @@ const RISK_REGISTRY_ABI = [
 const THREAT_LEVELS = ["SAFE", "WATCH", "WARNING", "CRITICAL"] as const;
 
 // ============================================================================
-// Cache (15s) + Price Change Tracking (global, not per-wallet)
+// Cache (45s) + Price Change Tracking (global, not per-wallet)
 // ============================================================================
 
 interface CachedResult {
@@ -274,7 +288,7 @@ interface CachedResult {
 }
 
 let cache: CachedResult | null = null;
-const CACHE_TTL_MS = 15_000;
+const CACHE_TTL_MS = 45_000;
 
 // Global in-memory store for previous adapter balances (vault-level, not per-user)
 const previousBalances: Map<string, number> = new Map();
@@ -291,16 +305,20 @@ function calcChange(current: number, previous: number): { changePercent: number;
 }
 
 // ============================================================================
-// viem Client
+// viem Client with Fallback Transports
 // ============================================================================
-
-const rpcUrl =
-  process.env.ARBITRUM_SEPOLIA_RPC_URL ||
-  "https://sepolia-rollup.arbitrum.io/rpc";
 
 const client = createPublicClient({
   chain: arbitrumSepolia,
-  transport: http(rpcUrl),
+  transport: fallback([
+    // Priority 1: User-defined RPC
+    ...(process.env.ARBITRUM_SEPOLIA_RPC_URL ? [http(process.env.ARBITRUM_SEPOLIA_RPC_URL)] : []),
+    // Priority 2: Official RPC
+    http("https://sepolia-rollup.arbitrum.io/rpc"),
+    // Priority 3: Public Fallbacks
+    http("https://arbitrum-sepolia.blockpi.network/v1/rpc/public"),
+    http("https://endpoints.omniatech.io/v1/arbitrum/sepolia/public"),
+  ]),
 });
 
 // ============================================================================
@@ -521,25 +539,23 @@ export async function GET(request: NextRequest) {
     const totalChange = calcChange(totalValueUsd, previousTotalValue);
     previousTotalValue = totalValueUsd;
 
-    // Phase 3: Fetch Base Sepolia balance + bridge pending data for global portfolio
-    let baseSepoliaBalance = 0;
+    // Phase 3: Waterfall Accounting & Race Condition Mitigation
+    let confirmedBaseBalance = 0;
     let pendingBridgeAmount = 0;
-    let unclaimedCrossChainFunds = 0;
+    let unclaimedBaseAmount = 0;
+    let arrivedPooledAmount = 0; // Arrived on Base but not yet claimable
     let pendingBridgeMessages: BridgeMessage[] = [];
     let completedBridgeMessages: BridgeMessage[] = [];
 
     try {
-      // Fetch current block to estimate user's deposit block
       const currentBlock = await client.getBlockNumber();
       const lastDepositTime = userPosition ? Number(userPosition.lastDepositTime) : 0;
       
-      // Rough estimate of the block when user deposited. 
-      // Arb Sepolia generates ~4 blocks/sec. We add a buffer of 500 blocks (~2 mins).
+      // Mitigation: Estimate deposit block to prevent capturing older bridges
       const depositBlockThreshold = lastDepositTime > 0
         ? Number(currentBlock) - Math.floor((Date.now() / 1000 - lastDepositTime) * 4) - 500
         : Number(currentBlock);
 
-      // Fetch Base balance and bridge status in parallel
       const [baseRes, bridgeData] = await Promise.all([
         fetch(`http://localhost:3000/api/base-safe-haven?wallet=${wallet}`, { signal: AbortSignal.timeout(5000) }).catch(() => null),
         fetchBridgeStatus({ wallet: wallet as string, noCache: isNoCache }).catch(() => null),
@@ -547,25 +563,24 @@ export async function GET(request: NextRequest) {
       
       if (baseRes?.ok) {
         const baseData = await baseRes.json();
-        baseSepoliaBalance = baseData.totalBalance ?? 0;
-        unclaimedCrossChainFunds = baseData.unclaimedCrossChainFunds ?? 0;
+        confirmedBaseBalance = baseData.totalBalance ?? 0;
+        unclaimedBaseAmount = baseData.unclaimedCrossChainFunds ?? 0;
       }
       
       if (bridgeData) {
-        // FILTER: Only show system-initiated messages if:
-        // 1. The user actually has a stake (shares > 0).
-        // 2. The message occurred AFTER the user's latest deposit (using block threshold).
-        
         const isUserActive = userShares > 0n;
 
         const processMessage = (msg: BridgeMessage) => {
-          const isSystem = msg.sender.toLowerCase() === SHIELD_VAULT.toLowerCase();
+          const isSystem = msg.sender.includes("ShieldVault");
           
           if (isSystem) {
-             // Block old system messages or if user has no stake
+             // Race Condition Mitigation:
+             // Ignore system bridges that occurred BEFORE user's last deposit.
+             // These funds belong to previous shares holders.
              if (!isUserActive || msg.sourceBlockNumber < depositBlockThreshold) return null;
           }
           
+          // Calculate user's proportional share of the bridge
           const userAmount = isSystem ? (msg.amount * userShareRatio) : msg.amount;
           if (userAmount < 0.000001) return null;
 
@@ -583,21 +598,33 @@ export async function GET(request: NextRequest) {
         pendingBridgeAmount = filteredPending.reduce((sum, m) => sum + m.amount, 0);
         pendingBridgeMessages = filteredPending;
         completedBridgeMessages = filteredCompleted;
+
+        // Waterfall State: Arrived Pooled
+        // Messages marked SUCCESS in CCIP but not yet reflected in user's claimable balance
+        // (Either Oracle delayed or user already claimed part of it)
+        const arrivedOnBase = filteredCompleted
+            .filter(m => m.status === 'SUCCESS')
+            .reduce((sum, m) => sum + m.amount, 0);
+        
+        // If arrived amount is significantly higher than what contract says is claimable,
+        // it means the Oracle (Sentinel) hasn't processed the latest batch yet.
+        arrivedPooledAmount = Math.max(0, arrivedOnBase - unclaimedBaseAmount);
       }
     } catch (err) { 
-      console.error("[portfolio/live] Bridge/Base fetch failed:", err);
+      console.error("[portfolio/live] Waterfall sync failed:", err);
     }
 
-    const globalTotalValueUsd = totalValueUsd + baseSepoliaBalance + pendingBridgeAmount + unclaimedCrossChainFunds;
+    const globalTotalValueUsd = totalValueUsd + confirmedBaseBalance + pendingBridgeAmount + arrivedPooledAmount + unclaimedBaseAmount;
 
     const responseData = {
       totalValueUsd,
       globalTotalValueUsd,
       chainBreakdown: {
         arbitrum: totalValueUsd,
-        base: baseSepoliaBalance,
+        base: confirmedBaseBalance,
         pendingBridge: pendingBridgeAmount,
-        unclaimedBase: unclaimedCrossChainFunds,
+        arrivedPooled: arrivedPooledAmount,
+        unclaimedBase: unclaimedBaseAmount,
       },
       lastDepositTime: userPosition ? Number(userPosition.lastDepositTime) : 0,
       pendingBridgeMessages,

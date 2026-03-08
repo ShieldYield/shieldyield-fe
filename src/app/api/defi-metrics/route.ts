@@ -245,10 +245,13 @@ export async function GET(request: NextRequest) {
 
     // Fetch all pools from DeFiLlama
     let pools: DefiLlamaPool[] = [];
+    let isFallback = false;
+
     try {
         const res = await fetch(DEFILLAMA_POOLS_URL, {
             headers: { Accept: "application/json" },
             cache: "no-store", // disable Next.js native cache because response > 2MB
+            signal: AbortSignal.timeout(15000), // Add timeout
         });
         if (!res.ok) {
             throw new Error(`DeFiLlama responded with ${res.status}`);
@@ -256,11 +259,20 @@ export async function GET(request: NextRequest) {
         const json = await res.json();
         pools = json.data ?? [];
     } catch (err: any) {
-        console.error("[defi-metrics] DeFiLlama fetch failed:", err);
-        return NextResponse.json(
-            { error: "Failed to fetch DeFiLlama pool data", detail: err.message, timestamp },
-            { status: 502 }
-        );
+        console.error("[defi-metrics] DeFiLlama fetch failed, using simulation data as fallback:", err.message);
+        isFallback = true;
+    }
+
+    if (isFallback || pools.length === 0) {
+        const fallbackData = {
+            ...SIM_DEFI_METRICS,
+            timestamp,
+            _fallback: true,
+            _error: "External API unreachable"
+        };
+        return NextResponse.json(fallbackData, { 
+            headers: { "X-Source": "simulation-fallback", "X-Cache": "FALLBACK" } 
+        });
     }
 
     // Find AAVE V3 USDC pool on Arbitrum

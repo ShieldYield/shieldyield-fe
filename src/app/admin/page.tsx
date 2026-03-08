@@ -39,7 +39,7 @@ export default function AdminPage() {
                     Admin Dashboard
                 </h1>
                 <p className="text-lg text-gray-400 max-w-2xl">
-                    Protocol configuration and emergency controls. Actions performed here require the 'Owner' wallet.
+                    Protocol configuration and emergency controls. Actions performed here require the &apos;Owner&apos; wallet.
                 </p>
 
                 {isOwnerLoading ? (

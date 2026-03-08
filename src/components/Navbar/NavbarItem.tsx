@@ -55,16 +55,27 @@ function NavbarItem({
 }: NavbarItemProps) {
     const ref = useRef<HTMLDivElement>(null);
     const [isHovered, setIsHovered] = useState(false);
+    const [size, setSize] = useState(baseItemSize);
 
-    const size = (() => {
-        if (mouseX === null || ref.current === null) return baseItemSize;
+    // Update size when mouse moves or item position might have changed
+    useEffect(() => {
+        if (mouseX === null || ref.current === null) {
+            setSize(baseItemSize);
+            return;
+        }
+        
         const rect = ref.current.getBoundingClientRect();
         const itemCenter = rect.left + rect.width / 2;
         const dist = Math.abs(mouseX - itemCenter);
-        if (dist >= distance) return baseItemSize;
-        const ratio = 1 - dist / distance;
-        return baseItemSize + (magnification - baseItemSize) * ratio;
-    })();
+        
+        if (dist >= distance) {
+            setSize(baseItemSize);
+        } else {
+            const ratio = 1 - dist / distance;
+            const newSize = baseItemSize + (magnification - baseItemSize) * ratio;
+            setSize(newSize);
+        }
+    }, [mouseX, distance, magnification, baseItemSize]);
 
     return (
         <div
@@ -100,12 +111,15 @@ function NavbarLabel({ children, className = '', isHovered }: NavbarLabelProps) 
     const [visible, setVisible] = useState(false);
 
     useEffect(() => {
+        let t: NodeJS.Timeout;
         if (isHovered) {
             setVisible(true);
         } else {
-            const t = setTimeout(() => setVisible(false), 150);
-            return () => clearTimeout(t);
+            t = setTimeout(() => setVisible(false), 150);
         }
+        return () => {
+            if (t) clearTimeout(t);
+        };
     }, [isHovered]);
 
     return (

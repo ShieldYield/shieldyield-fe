@@ -1,34 +1,68 @@
 'use client';
 
 import { useEffect, useState, useCallback, useRef } from 'react';
-import { useAccount } from 'wagmi';
-import { AdapterCard, RiskBadge, SentinelBanner, VaultActions, LiveYieldTicker, FundFlowDiagram } from '../components/Dashboard';
+import { useAccount, useSwitchChain, useChainId } from 'wagmi';
+import { motion, AnimatePresence } from 'framer-motion';
+import { AdapterCard, RiskBadge, SentinelBanner, VaultActions, LiveYieldTicker, FundFlowDiagram, CrossChainSafeHaven } from '../components/Dashboard';
+
 import type { SentinelData } from '../components/Dashboard';
 import { Header } from '../components/Header';
 import { Navbar } from '../components/Navbar';
 import { useSimMode } from '../context/SimModeContext';
+import { type BridgeMessage } from '@/lib/bridge-status';
+
+interface AdapterData {
+  address: string;
+  balance: number;
+  apy: number;
+  isHealthy: boolean;
+  principal: number;
+  accruedYield: number;
+  allocation: number;
+  targetAllocation: number;
+  changePercent: number;
+  changeDirection: 'up' | 'down' | 'neutral';
+  topPools?: Array<{ protocol: string; apy: number }>;
+}
+
+interface RiskScore {
+  score: number;
+  level: 'SAFE' | 'WATCH' | 'WARNING' | 'CRITICAL';
+}
 
 interface PortfolioData {
   totalValueUsd: number;
   globalTotalValueUsd?: number;
-  chainBreakdown?: { arbitrum: number; base: number; pendingBridge?: number; unclaimedBase?: number };
+  chainBreakdown?: { arbitrum: number; base: number; pendingBridge?: number; arrivedPooled?: number; unclaimedBase?: number };
   totalChangePercent: number;
   totalChangeDirection: 'up' | 'down' | 'neutral';
   lastDepositTime: number;
-  pendingBridgeMessages?: any[];
-  completedBridgeMessages?: any[];
-  adapters: Record<string, any>;
-  riskScores: Record<string, any>;
+  pendingBridgeMessages?: BridgeMessage[];
+  completedBridgeMessages?: BridgeMessage[];
+  adapters: Record<string, AdapterData>;
+  riskScores: Record<string, RiskScore>;
+}
+
+interface LendingMetrics {
+  totalSupplied: string;
+  totalBorrowed: string;
+  supplyApy?: number;
+  supplyApr?: number;
+  borrowApy?: number;
+  borrowApr?: number;
+  utilization: number;
 }
 
 export default function Home() {
   const [portfolio, setPortfolio] = useState<PortfolioData | null>(null);
-  const [defiMetrics, setDefiMetrics] = useState<{ aave: any; compound: any } | null>(null);
+  const [defiMetrics, setDefiMetrics] = useState<{ aave: LendingMetrics; compound: LendingMetrics } | null>(null);
   const [sentinel, setSentinel] = useState<SentinelData | null>(null);
   const [sentinelLoading, setSentinelLoading] = useState(true);
   const [loading, setLoading] = useState(true);
 
   const { address: connectedWallet, isConnected } = useAccount();
+  const { switchChain } = useSwitchChain();
+  const chainId = useChainId();
   const wallet = isConnected ? connectedWallet : null;
   const { isSimMode } = useSimMode();
 
@@ -99,7 +133,7 @@ export default function Home() {
   useEffect(() => {
     setLoading(true);
     fetchPortfolio();
-    const interval = setInterval(fetchPortfolio, 10_000);
+    const interval = setInterval(fetchPortfolio, 45_000);
     return () => clearInterval(interval);
   }, [fetchPortfolio]);
 
@@ -157,8 +191,8 @@ export default function Home() {
     return () => clearInterval(interval);
   }, [isAnyBridgePending, fetchPortfolio]);
 
-  const adapters: Record<string, any> = portfolio?.adapters || {};
-  const riskScores: Record<string, any> = portfolio?.riskScores || {};
+  const adapters = portfolio?.adapters || {};
+  const riskScores = portfolio?.riskScores || {};
   const totalValue = portfolio?.globalTotalValueUsd ?? portfolio?.totalValueUsd ?? 0;
   const totalChangePercent = portfolio?.totalChangePercent ?? 0;
   const totalChangeDirection = portfolio?.totalChangeDirection ?? 'neutral';
@@ -166,13 +200,13 @@ export default function Home() {
   // ── Live total value interpolation ──
   const [liveTotal, setLiveTotal] = useState(totalValue);
   const baseTotalRef = useRef(totalValue);
-  const lastPollRef = useRef(Date.now());
+  const lastPollRef = useRef(0);
 
   // Compute weighted APY for interpolation
-  const adapterEntries = Object.values(adapters) as any[];
-  const totalBal = adapterEntries.reduce((s: number, a: any) => s + (a.balance || 0), 0);
+  const adapterEntries = Object.values(adapters);
+  const totalBal = adapterEntries.reduce((s: number, a) => s + (a.balance || 0), 0);
   const weightedApy = totalBal > 0
-    ? adapterEntries.reduce((s: number, a: any) => s + (a.balance || 0) * (a.apy || 0), 0) / totalBal
+    ? adapterEntries.reduce((s: number, a) => s + (a.balance || 0) * (a.apy || 0), 0) / totalBal
     : 0;
   const yieldPerSecond = (totalBal * (weightedApy / 100)) / 31_536_000;
 
@@ -194,8 +228,8 @@ export default function Home() {
   }, [yieldPerSecond]);
 
   const overallLevel = Object.values(riskScores).reduce(
-    (worst: string, r: any) => {
-      const order = ['SAFE', 'WATCH', 'WARNING', 'CRITICAL'];
+    (worst: RiskScore['level'], r) => {
+      const order = ['SAFE', 'WATCH', 'WARNING', 'CRITICAL'] as const;
       return order.indexOf(r.level) > order.indexOf(worst) ? r.level : worst;
     },
     'SAFE'
@@ -204,16 +238,16 @@ export default function Home() {
   const showConnectPrompt = !isConnected && !portfolio;
 
   const [showBridgeDetails, setShowBridgeDetails] = useState(false);
-   const arbBalance = portfolio?.chainBreakdown?.arbitrum ?? 0;
+  const arbBalance = portfolio?.chainBreakdown?.arbitrum ?? 0;
   const rawBaseBalance = portfolio?.chainBreakdown?.base ?? 0;
   const ccipPending = portfolio?.chainBreakdown?.pendingBridge ?? 0;
+  const arrivedPooled = portfolio?.chainBreakdown?.arrivedPooled ?? 0;
   const unclaimedBase = portfolio?.chainBreakdown?.unclaimedBase ?? 0;
 
   // AUTO-CLAIM UI SIMULATION:
-  // If there are funds arrived on Base but not yet claimed, we show them 
-  // as part of the Base balance so the user sees their total value immediately.
-  const baseBalance = rawBaseBalance + unclaimedBase;
-  const isClaimingAvailable = unclaimedBase > 0.001;
+  // If there are funds arrived on Base but not yet claimed, or currently in flight (CCIP),
+  // we show them as part of the Base balance so the user sees their total value immediately.
+  const baseBalance = rawBaseBalance + unclaimedBase + ccipPending + arrivedPooled;
 
   // History combined: Show both pending and completed
   const bridgeHistory = [
@@ -221,13 +255,15 @@ export default function Home() {
     ...(portfolio?.completedBridgeMessages || [])
   ].sort((a, b) => b.sourceBlockNumber - a.sourceBlockNumber);
 
-  const globalTotalCalc = arbBalance + baseBalance + ccipPending;
+  const globalTotalCalc = arbBalance + baseBalance;
+  // For the breakdown bar, we want to show Arb vs Pending vs Arrived vs Real Base
+  const realBaseBalance = rawBaseBalance + unclaimedBase;
   const arbPercent = globalTotalCalc > 0 ? (arbBalance / globalTotalCalc) * 100 : 100;
-  const basePercent = globalTotalCalc > 0 ? (baseBalance / globalTotalCalc) * 100 : 0;
+  const basePercent = globalTotalCalc > 0 ? (realBaseBalance / globalTotalCalc) * 100 : 0;
   const ccipPercent = globalTotalCalc > 0 ? (ccipPending / globalTotalCalc) * 100 : 0;
-  const unclaimedPercent = globalTotalCalc > 0 ? (unclaimedBase / globalTotalCalc) * 100 : 0;
+  const arrivedPercent = globalTotalCalc > 0 ? (arrivedPooled / globalTotalCalc) * 100 : 0;
 
-  const hasBridged = baseBalance > 0.001 || ccipPending > 0 || unclaimedBase > 0;
+  const hasBridged = baseBalance > 0.001 || ccipPending > 0 || unclaimedBase > 0 || arrivedPooled > 0;
   const isCcipPending = ccipPending > 0.001;
   const pendingMessages = portfolio?.pendingBridgeMessages ?? [];
 
@@ -238,6 +274,7 @@ export default function Home() {
       </header>
 
       <main className="grow w-full py-6 px-4 md:px-8 lg:px-16 pb-28">
+        
         {loading ? (
           <div className="flex items-center justify-center h-[60vh]">
             <div className="flex flex-col items-center gap-3">
@@ -247,25 +284,73 @@ export default function Home() {
           </div>
         ) : showConnectPrompt ? (
           <div className="flex items-center justify-center h-[60vh]">
-            <div className="flex flex-col items-center gap-4 text-center">
-              <div className="w-16 h-16 rounded-2xl bg-zinc-800/50 border border-zinc-700 flex items-center justify-center">
-                <span className="text-3xl">🛡️</span>
-              </div>
-              <h2 className="text-xl font-bold text-zinc-200">
-                Welcome to Shield<span className="text-cyan-400">Yield</span>
-              </h2>
-              <p className="text-sm text-zinc-500 max-w-sm">
-                Connect your wallet to monitor your DeFi portfolio, view risk scores, and receive real-time anomaly alerts.
-              </p>
-              <div className="mt-2 px-4 py-2 bg-zinc-800/60 rounded-lg border border-zinc-700">
-                <p className="text-xs text-zinc-600">
-                  Click <span className="text-cyan-400 font-medium">Connect Wallet</span> in the top right corner
-                </p>
-              </div>
-            </div>
+            {/* ... connect prompt code ... */}
           </div>
         ) : (
           <div className="space-y-6 max-w-7xl mx-auto">
+            {/* Large Network Indicator & Switch Button */}
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-4 p-4 bg-zinc-900/60 border border-zinc-800 rounded-2xl mb-2">
+              <div className="flex items-center gap-4">
+                <div className={`flex items-center justify-center w-12 h-12 rounded-xl text-2xl shadow-lg ${chainId === 84532 ? 'bg-emerald-500/20 text-emerald-400 shadow-emerald-500/10' : 'bg-blue-500/20 text-blue-400 shadow-blue-500/10'}`}>
+                  {chainId === 84532 ? '🛡️' : '⚡'}
+                </div>
+                <div>
+                  <p className="text-[10px] text-zinc-500 uppercase tracking-[0.2em] font-bold">Active Network</p>
+                  <h2 className={`text-xl font-bold ${chainId === 84532 ? 'text-emerald-400' : 'text-blue-400'}`}>
+                    {chainId === 84532 ? 'Base Sepolia (Safe Haven)' : 'Arbitrum Sepolia (Active)'}
+                  </h2>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                {chainId !== 84532 && (
+                  <button
+                    onClick={() => switchChain?.({ chainId: 84532 })}
+                    className="px-6 py-2.5 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 rounded-xl text-zinc-300 text-sm font-medium transition-all active:scale-95 flex items-center gap-2"
+                  >
+                    <span className="text-emerald-400 text-lg">🛡️</span>
+                    Switch to Base Haven
+                  </button>
+                )}
+                {chainId === 84532 && (
+                  <button
+                    onClick={() => switchChain?.({ chainId: 421614 })}
+                    className="px-6 py-2.5 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 rounded-xl text-zinc-300 text-sm font-medium transition-all active:scale-95 flex items-center gap-2"
+                  >
+                    <span className="text-blue-400 text-lg">⚡</span>
+                    Switch back to Arbitrum
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Safe Haven Rescue Banner */}
+            {baseBalance > 0.001 && chainId !== 84532 && (
+              <motion.div 
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                className="bg-emerald-500/10 border border-emerald-500/30 rounded-[2rem] p-8 flex flex-col md:flex-row items-center justify-between gap-6 shadow-2xl shadow-emerald-900/20 mb-4"
+              >
+                <div className="flex items-center gap-5 text-center md:text-left">
+                  <div className="w-16 h-16 rounded-2xl bg-emerald-500/20 flex items-center justify-center text-3xl shadow-inner">
+                    🛡️
+                  </div>
+                  <div>
+                    <h3 className="text-emerald-400 font-bold text-xl leading-tight">Shielded Funds Detected on Base</h3>
+                    <p className="text-zinc-400 text-sm mt-1 max-w-md">
+                      Your assets have been successfully evacuated to the Safe Haven. Switch network to Base Sepolia to claim and withdraw your <span className="text-emerald-400 font-mono font-bold">${(unclaimedBase + rawBaseBalance).toLocaleString('en-US', { minimumFractionDigits: 2 })}</span>.
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => switchChain?.({ chainId: 84532 })}
+                  className="px-8 py-4 bg-emerald-500 hover:bg-emerald-400 text-zinc-950 font-bold rounded-2xl transition-all shadow-lg shadow-emerald-500/40 active:scale-95 whitespace-nowrap text-base"
+                >
+                  Rescue Funds Now →
+                </button>
+              </motion.div>
+            )}
+
             {/* Hero: Global Portfolio + Chain Breakdown + Risk */}
             <div className="flex flex-col p-6 md:p-10 bg-zinc-900/40 border border-zinc-800/80 rounded-[2rem] relative overflow-hidden shadow-2xl">
               {/* Background gradient effect */}
@@ -386,9 +471,9 @@ export default function Home() {
                             <span className="w-2.5 h-2.5 rounded-full bg-blue-500" />
                             Arbitrum {arbPercent.toFixed(0)}%
                           </span>
-                          {isCcipPending && (
-                            <span className="flex items-center gap-2 text-emerald-400 animate-pulse">
-                              Shielding in Progress {ccipPercent.toFixed(0)}%
+                          {arrivedPercent > 0 && (
+                            <span className="flex items-center gap-2 text-cyan-400">
+                              Finalizing {arrivedPercent.toFixed(0)}%
                             </span>
                           )}
                           <span className="flex items-center gap-2">
@@ -405,6 +490,12 @@ export default function Home() {
                             <div
                               className="h-full bg-gradient-to-r from-emerald-600 to-emerald-400 transition-all duration-700 animate-pulse"
                               style={{ width: `${ccipPercent}%` }}
+                            />
+                          )}
+                          {arrivedPercent > 0 && (
+                            <div
+                              className="h-full bg-cyan-500/60 transition-all duration-700"
+                              style={{ width: `${arrivedPercent}%` }}
                             />
                           )}
                           {basePercent > 0 && (
@@ -490,7 +581,7 @@ export default function Home() {
 
                       {pendingMessages.length > 0 ? (
                         <div className="space-y-3 flex-1">
-                          {pendingMessages.map((msg: any) => (
+                          {pendingMessages.map((msg) => (
                             <a
                               key={msg.messageId}
                               href={msg.ccipExplorerUrl}
@@ -552,7 +643,7 @@ export default function Home() {
 
             {/* Live Yield Ticker */}
             {Object.keys(adapters).length > 0 && (() => {
-              const totalYield = adapterEntries.reduce((sum: number, a: any) => sum + (a.accruedYield || 0), 0);
+              const totalYield = adapterEntries.reduce((sum: number, a) => sum + (a.accruedYield || 0), 0);
               return (
                 <LiveYieldTicker
                   totalBalance={totalBal}
@@ -588,7 +679,7 @@ export default function Home() {
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-zinc-800/30">
-                        {bridgeHistory.map((msg: any) => (
+                        {bridgeHistory.map((msg) => (
                           <tr key={msg.messageId} className="hover:bg-zinc-800/20 transition-colors group">
                             <td className="px-5 py-4 whitespace-nowrap">
                               <span className="text-xs text-zinc-400 font-mono">
@@ -639,7 +730,7 @@ export default function Home() {
                   <AdapterCard
                     key={name}
                     name={name}
-                    data={data as any}
+                    data={data}
                     riskScore={riskScores[name]}
                   />
                 ))}

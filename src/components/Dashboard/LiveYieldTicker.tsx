@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState, useRef, useCallback } from 'react';
 
 interface LiveYieldTickerProps {
     totalBalance: number;
@@ -29,7 +29,7 @@ export default function LiveYieldTicker({
 
     // Menghitung titik awal yang "Live":
     // Base Yield dari Chain + (Hasil Per Detik * Selisih Detik sejak Update Terakhir)
-    const getInitialLiveYield = () => {
+    const getInitialLiveYield = useCallback(() => {
         if (totalAccruedYield === 0 && lastDepositTime === 0) return 0;
         
         // Jika ada yield di chain, gunakan itu. Jika tidak, hitung perkiraan sejak deposit.
@@ -41,11 +41,11 @@ export default function LiveYieldTicker({
         const secondsElapsed = Math.max(0, nowInSeconds - lastDepositTime);
         
         return base + (secondsElapsed * yieldPerSecond);
-    };
+    }, [totalAccruedYield, lastDepositTime, yieldPerSecond]);
 
-    const [displayYield, setDisplayYield] = useState(getInitialLiveYield);
-    const lastUpdateRef = useRef(Date.now());
-    const baseYieldRef = useRef(getInitialLiveYield());
+    const [displayYield, setDisplayYield] = useState(0);
+    const lastUpdateRef = useRef(0);
+    const baseYieldRef = useRef(0);
 
     // Sync base saat data API masuk
     useEffect(() => {
@@ -53,7 +53,7 @@ export default function LiveYieldTicker({
         baseYieldRef.current = initial;
         lastUpdateRef.current = Date.now();
         setDisplayYield(initial);
-    }, [totalAccruedYield, lastDepositTime, yieldPerSecond]);
+    }, [getInitialLiveYield]);
 
     // Client-side interpolation: tick setiap 100ms
     useEffect(() => {

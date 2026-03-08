@@ -92,19 +92,27 @@ let statusCache: { data: BridgeStatusResult; timestamp: number } | null = null;
 const CACHE_TTL_MS = 10_000;
 
 // ============================================================================
-// Viem Clients (singleton per process)
+// Viem Clients (singleton per process) with Fallback Transports
 // ============================================================================
 
-const arbRpcUrl = process.env.ARBITRUM_SEPOLIA_RPC_URL || "https://sepolia-rollup.arbitrum.io/rpc";
+import { fallback } from "viem";
 
 const arbClient = createPublicClient({
     chain: arbitrumSepolia,
-    transport: http(arbRpcUrl),
+    transport: fallback([
+        ...(process.env.ARBITRUM_SEPOLIA_RPC_URL ? [http(process.env.ARBITRUM_SEPOLIA_RPC_URL)] : []),
+        http("https://sepolia-rollup.arbitrum.io/rpc"),
+        http("https://arbitrum-sepolia.blockpi.network/v1/rpc/public"),
+        http("https://endpoints.omniatech.io/v1/arbitrum/sepolia/public"),
+    ]),
 });
 
 const baseClient = createPublicClient({
     chain: baseSepolia,
-    transport: http("https://sepolia.base.org"),
+    transport: fallback([
+        http("https://sepolia.base.org"),
+        http("https://base-sepolia.blockpi.network/v1/rpc/public"),
+    ]),
 });
 
 // ============================================================================
@@ -157,17 +165,25 @@ export async function fetchBridgeStatus(options?: { noCache?: boolean; wallet?: 
     }
 
     // Get recent block numbers from both chains
-    const [arbBlock, baseBlock] = await Promise.all([
-        arbClient.getBlockNumber(),
-        baseClient.getBlockNumber(),
-    ]);
+    let arbBlock = 0n;
+    let baseBlock = 0n;
 
-    // Arb Sepolia: ~0.26s/block → 50k blocks ≈ 3.6 hours
-    // Base Sepolia: ~2s/block, RPC limited to 10k blocks → 9k blocks ≈ 5 hours
-    // Arb Sepolia: ~0.26s/block. 40k blocks ≈ 3 hours.
-    // Base Sepolia: ~2s/block. 9k blocks ≈ 5 hours.
-    const ARB_LOOKBACK = 40000n; 
-    const BASE_LOOKBACK = 9000n; // Fixed: Must be < 10,000 for Base public RPC
+    try {
+        const [a, b] = await Promise.all([
+            arbClient.getBlockNumber().catch(e => { console.error("[bridge-status] Arb getBlockNumber failed:", e); return 0n; }),
+            baseClient.getBlockNumber().catch(e => { console.error("[bridge-status] Base getBlockNumber failed:", e); return 0n; }),
+        ]);
+        arbBlock = a;
+        baseBlock = b;
+    } catch (err) {
+        console.error("[bridge-status] Failed to fetch block numbers:", err);
+    }
+
+    // Balanced lookback for stability (limit to 10k blocks per request)
+    // Arbitrum Sepolia: ~0.26s/block. 10,000 blocks ≈ 45 minutes.
+    // Base Sepolia: ~2s/block. 5,000 blocks ≈ 2.5 hours.
+    const ARB_LOOKBACK = 10000n; 
+    const BASE_LOOKBACK = 5000n; 
     const arbFromBlock = arbBlock > ARB_LOOKBACK ? arbBlock - ARB_LOOKBACK : 0n;
     const baseFromBlock = baseBlock > BASE_LOOKBACK ? baseBlock - BASE_LOOKBACK : 0n;
 
@@ -243,7 +259,8 @@ export async function fetchBridgeStatus(options?: { noCache?: boolean; wallet?: 
         // 1. Tampilkan jika ini milik wallet user.
         // 2. Tampilkan jika pengirimnya adalah System (ShieldVault kita).
         // 3. ABAIKAN jika itu milik user lain (alamat wallet asing).
-        const isSystem = senderLower === "0xE2b7f9E85ee0390B2c3bC874301CAeB941Fc88eB".toLowerCase();
+        const SHIELD_VAULT_ADDRESS = "0xE2b7f9E85ee0390B2c3bC874301CAeB941Fc88eB";
+        const isSystem = senderLower === SHIELD_VAULT_ADDRESS.toLowerCase();
         const isUser = walletLower && senderLower === walletLower;
 
         if (walletLower && !isUser && !isSystem) continue;
@@ -264,7 +281,7 @@ export async function fetchBridgeStatus(options?: { noCache?: boolean; wallet?: 
             status: isReceivedOnChain ? "SUCCESS" : "PENDING",
             amount,
             token,
-            sender,
+            sender: isSystem ? "ShieldVault (System)" : sender,
             destinationChain,
             sourceChain: "Arbitrum Sepolia",
             sourceTxHash: log.transactionHash ?? "",

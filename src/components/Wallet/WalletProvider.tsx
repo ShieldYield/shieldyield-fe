@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { WagmiProvider, http } from 'wagmi';
-import { arbitrumSepolia } from 'wagmi/chains';
+import { arbitrumSepolia, baseSepolia } from 'wagmi/chains';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { RainbowKitProvider, getDefaultConfig, darkTheme } from '@rainbow-me/rainbowkit';
 import '@rainbow-me/rainbowkit/styles.css';
@@ -10,12 +10,13 @@ import '@rainbow-me/rainbowkit/styles.css';
 const config = getDefaultConfig({
     appName: 'ShieldYield',
     projectId: process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID || 'demo',
-    chains: [arbitrumSepolia],
+    chains: [arbitrumSepolia, baseSepolia],
     transports: {
         [arbitrumSepolia.id]: http(
             process.env.NEXT_PUBLIC_ARBITRUM_SEPOLIA_RPC ||
             'https://sepolia-rollup.arbitrum.io/rpc'
         ),
+        [baseSepolia.id]: http('https://sepolia.base.org'),
     },
     ssr: true,
 });

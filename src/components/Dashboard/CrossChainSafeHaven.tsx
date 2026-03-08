@@ -1,15 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { useAccount } from 'wagmi';
-
-interface AdapterData {
-    name: string;
-    address: string;
-    balance: number;
-    apy: number;
-    isHealthy: boolean;
-}
+import { useMemo } from 'react';
 
 interface PendingBridgeMessage {
     messageId: string;
@@ -20,49 +11,6 @@ interface PendingBridgeMessage {
     sender?: string;
     sourceTxHash?: string;
 }
-
-interface SafeHavenData {
-    chain: string;
-    chainId: number;
-    shieldVault: string;
-    shieldBridge: string;
-    emergencyBridgeCount: number;
-    escrowBalance: number;
-    totalBalance: number;
-    adapters: AdapterData[];
-    safeHavenAdapters: AdapterData[];
-    hasFunds: boolean;
-    ccipExplorer: string;
-    ccipPendingBalance?: number;
-    pendingBridgeMessages?: PendingBridgeMessage[];
-}
-
-interface BridgeStatusData {
-    pendingMessages: PendingBridgeMessage[];
-    completedMessages: PendingBridgeMessage[];
-    totalPendingAmount: number;
-    totalBridgedAmount: number;
-    emergencyBridgeCount: number;
-}
-
-interface ChainBreakdown {
-    arbitrum: number;
-    base: number;
-    pendingBridge?: number;
-}
-
-interface PortfolioData {
-    globalTotalValueUsd?: number;
-    chainBreakdown?: ChainBreakdown;
-    pendingBridgeMessages?: PendingBridgeMessage[];
-}
-
-const PROTOCOL_ICONS: Record<string, string> = {
-    AaveAdapter: '🔵',
-    CompoundAdapter: '🟢',
-    MorphoAdapter: '🟣',
-    YieldMaxAdapter: '🟡',
-};
 
 const STATUS_CONFIG: Record<string, { label: string; color: string; bgColor: string; borderColor: string; pulse: boolean }> = {
     PENDING: { label: 'Success (Bridging)', color: 'text-emerald-400', bgColor: 'bg-emerald-500/10', borderColor: 'border-emerald-500/30', pulse: true },
@@ -77,55 +25,35 @@ function truncateHash(hash: string): string {
     return `${hash.slice(0, 6)}...${hash.slice(-4)}`;
 }
 
-export default function CrossChainSafeHaven() {
-    const { address: wallet } = useAccount();
-    const [baseData, setBaseData] = useState<SafeHavenData | null>(null);
-    const [portfolioData, setPortfolioData] = useState<PortfolioData | null>(null);
-    const [bridgeStatus, setBridgeStatus] = useState<BridgeStatusData | null>(null);
-    const [loading, setLoading] = useState(true);
+interface CrossChainSafeHavenProps {
+    portfolioData: any;
+}
 
-    useEffect(() => {
-        if (!wallet) {
-            setLoading(false);
-            return;
-        }
+export default function CrossChainSafeHaven({ portfolioData }: CrossChainSafeHavenProps) {
+    // This component now uses the global portfolio data from app/page.tsx
+    // to prevent redundant RPC requests (429 Rate Limit fix).
+    const loading = !portfolioData;
 
-        const fetchAll = async () => {
-            try {
-                const [baseRes, portRes, bridgeRes] = await Promise.all([
-                    fetch(`/api/base-safe-haven?wallet=${wallet}`).then(r => r.ok ? r.json() : null).catch(() => null),
-                    fetch(`/api/portfolio/live?wallet=${wallet}`).then(r => r.ok ? r.json() : null).catch(() => null),
-                    fetch(`/api/bridge-status?wallet=${wallet}`).then(r => r.ok ? r.json() : null).catch(() => null),
-                ]);
-                if (baseRes) setBaseData(baseRes);
-                if (portRes) setPortfolioData(portRes);
-                if (bridgeRes) setBridgeStatus(bridgeRes);
-            } catch { /* ignore */ }
-            setLoading(false);
-        };
-
-        fetchAll();
-        const iv = setInterval(fetchAll, 15_000);
-        return () => clearInterval(iv);
-    }, [wallet]);
-
+    // Mapping fields from the global portfolio API response
     const arbBalance = portfolioData?.chainBreakdown?.arbitrum ?? 0;
-    const baseBalance = portfolioData?.chainBreakdown?.base ?? baseData?.totalBalance ?? 0;
-    const ccipPending = bridgeStatus?.totalPendingAmount ?? baseData?.ccipPendingBalance ?? 0;
-    const globalTotal = arbBalance + baseBalance + ccipPending;
+    const ccipPending = portfolioData?.chainBreakdown?.pendingBridge ?? 0;
+    const unclaimedBase = portfolioData?.chainBreakdown?.unclaimedBase ?? 0;
+    const rawBaseBalance = portfolioData?.chainBreakdown?.base ?? 0;
+    
+    // Visually include pending CCIP into Base balance for better demo UX
+    const baseBalance = rawBaseBalance + unclaimedBase + ccipPending;
+    const globalTotal = arbBalance + baseBalance;
+    
     const arbPercent = globalTotal > 0 ? (arbBalance / globalTotal) * 100 : 100;
-    const basePercent = globalTotal > 0 ? (baseBalance / globalTotal) * 100 : 0;
+    const basePercent = globalTotal > 0 ? ((rawBaseBalance + unclaimedBase) / globalTotal) * 100 : 0;
     const ccipPercent = globalTotal > 0 ? (ccipPending / globalTotal) * 100 : 0;
-    const totalBridgeCount = bridgeStatus?.emergencyBridgeCount ?? baseData?.emergencyBridgeCount ?? 0;
-    const hasBridged = totalBridgeCount > 0 || baseBalance > 0.001 || ccipPending > 0;
+    
+    // History/Status info
+    const pendingMessages = portfolioData?.pendingBridgeMessages ?? [];
+    const recentCompleted = (portfolioData?.completedBridgeMessages ?? []).slice(0, 3);
+    
     const isCcipPending = ccipPending > 0.001;
-
-    // Merge pending messages from bridge-status API (primary) or base-safe-haven (fallback)
-    const pendingMessages: PendingBridgeMessage[] =
-        bridgeStatus?.pendingMessages ?? baseData?.pendingBridgeMessages ?? [];
-
-    // Show up to 3 most recent completed messages
-    const recentCompleted = (bridgeStatus?.completedMessages ?? []).slice(0, 3);
+    const hasBridged = baseBalance > 0.001 || ccipPending > 0;
 
     return (
         <div className="relative bg-zinc-900/60 backdrop-blur-sm border border-zinc-800 rounded-2xl overflow-hidden">
@@ -243,9 +171,9 @@ export default function CrossChainSafeHaven() {
                                     <span className="text-[9px] font-mono text-emerald-400">
                                         ${ccipPending.toLocaleString('en-US', { minimumFractionDigits: 2 })}
                                     </span>
-                                ) : (totalBridgeCount > 0 && (
+                                ) : (hasBridged && (
                                     <span className="text-[8px] text-zinc-600">
-                                        {totalBridgeCount}x bridged
+                                        evacuated
                                     </span>
                                 ))}
                             </div>
@@ -276,7 +204,7 @@ export default function CrossChainSafeHaven() {
                                         Success: Shielding in Progress
                                     </p>
                                 </div>
-                                {pendingMessages.map((msg) => {
+                                {pendingMessages.map((msg: PendingBridgeMessage) => {
                                     const cfg = STATUS_CONFIG[msg.status] ?? STATUS_CONFIG.UNKNOWN;
                                     return (
                                         <a
@@ -316,96 +244,13 @@ export default function CrossChainSafeHaven() {
                             </div>
                         )}
 
-                        {/* Chain Details — Two Columns */}
-                        {(baseData || arbBalance > 0) && (
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-2">
-                                {/* Arbitrum Column */}
-                                <div className="space-y-2">
-                                    <div className="flex items-center gap-1.5 mb-2">
-                                        <span className="w-2 h-2 rounded-full bg-blue-500" />
-                                        <p className="text-[10px] text-zinc-400 uppercase tracking-widest font-medium">
-                                            Arbitrum Sepolia
-                                        </p>
-                                    </div>
-                                    <div className="px-3 py-2.5 rounded-xl bg-zinc-800/40 border border-zinc-700/40">
-                                        <div className="flex items-center justify-between">
-                                            <span className="text-[10px] text-zinc-500">Primary Vault</span>
-                                            <span className={`text-xs font-mono font-medium ${arbBalance > 0.001 ? 'text-blue-400' : 'text-zinc-600'}`}>
-                                                ${arbBalance.toLocaleString('en-US', { minimumFractionDigits: 4, maximumFractionDigits: 4 })}
-                                            </span>
-                                        </div>
-                                        <p className="text-[9px] text-zinc-600 mt-1">
-                                            Aave · Compound · Morpho · YieldMax
-                                        </p>
-                                    </div>
-                                </div>
-
-                                {/* Base Column */}
-                                <div className="space-y-2">
-                                    <div className="flex items-center gap-1.5 mb-2">
-                                        <span className="w-2 h-2 rounded-full bg-emerald-500" />
-                                        <p className="text-[10px] text-zinc-400 uppercase tracking-widest font-medium">
-                                            Base Sepolia
-                                        </p>
-                                    </div>
-                                    {baseData ? (
-                                        <div className="space-y-1.5">
-                                            {/* Escrow Balance */}
-                                            {baseData.escrowBalance > 0.001 && (
-                                                <div className="flex items-center justify-between px-3 py-2 rounded-xl bg-emerald-500/5 border border-emerald-500/20">
-                                                    <div className="flex items-center gap-1.5">
-                                                        <span className="text-xs">🛡️</span>
-                                                        <span className="text-[10px] text-emerald-400">Escrow Secured</span>
-                                                    </div>
-                                                    <span className="text-xs font-mono font-medium text-emerald-400">
-                                                        ${baseData.escrowBalance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 4 })}
-                                                    </span>
-                                                </div>
-                                            )}
-                                            {/* Base Adapters */}
-                                            {baseData.adapters.filter(a => a.balance > 0.001).map(adapter => {
-                                                const icon = PROTOCOL_ICONS[adapter.name] || '⚪';
-                                                const displayName = adapter.name.replace('Adapter', '');
-                                                return (
-                                                    <div key={adapter.name} className="flex items-center justify-between px-3 py-2 rounded-xl bg-emerald-500/5 border border-emerald-500/20">
-                                                        <div className="flex items-center gap-1.5">
-                                                            <span className="text-xs">{icon}</span>
-                                                            <span className="text-[10px] text-zinc-300">{displayName}</span>
-                                                        </div>
-                                                        <span className="text-xs font-mono font-medium text-emerald-400">
-                                                            ${adapter.balance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 4 })}
-                                                        </span>
-                                                    </div>
-                                                );
-                                            })}
-                                            {baseData.adapters.every(a => a.balance <= 0.001) && baseData.escrowBalance <= 0.001 && (
-                                                <div className="px-3 py-2.5 rounded-xl bg-zinc-800/40 border border-zinc-700/40">
-                                                    <div className="flex items-center justify-between">
-                                                        <span className="text-[10px] text-zinc-500">Safe Haven Vault</span>
-                                                        <span className="text-xs font-mono text-zinc-600">$0.00</span>
-                                                    </div>
-                                                    <p className="text-[9px] text-zinc-600 mt-1">
-                                                        Awaiting CCIP evacuation
-                                                    </p>
-                                                </div>
-                                            )}
-                                        </div>
-                                    ) : (
-                                        <div className="px-3 py-2.5 rounded-xl bg-zinc-800/40 border border-zinc-700/40">
-                                            <span className="text-[10px] text-zinc-600">Unreachable</span>
-                                        </div>
-                                    )}
-                                </div>
-                            </div>
-                        )}
-
                         {/* === Recent Completed Bridges === */}
                         {recentCompleted.length > 0 && (
                             <div className="space-y-1.5 pt-1">
                                 <p className="text-[9px] text-zinc-600 uppercase tracking-widest font-medium">
                                     Recent Bridges
                                 </p>
-                                {recentCompleted.map((msg) => {
+                                {recentCompleted.map((msg: any) => {
                                     const cfg = STATUS_CONFIG[msg.status] ?? STATUS_CONFIG.SUCCESS;
                                     return (
                                         <a
