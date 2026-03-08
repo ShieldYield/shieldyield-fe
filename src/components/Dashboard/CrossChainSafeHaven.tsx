@@ -1,6 +1,17 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { useAccount, useWriteContract, useWaitForTransactionReceipt } from 'wagmi';
+
+// ABI for the ShieldVault claim function
+const SHIELD_VAULT_ABI = [
+    {
+        name: 'claimCrossChainFunds',
+        type: 'function',
+        stateMutability: 'nonpayable',
+        inputs: [],
+    },
+] as const;
 
 interface AdapterData {
     name: string;
@@ -28,6 +39,7 @@ interface SafeHavenData {
     emergencyBridgeCount: number;
     escrowBalance: number;
     totalBalance: number;
+    unclaimedCrossChainFunds?: number;
     adapters: AdapterData[];
     safeHavenAdapters: AdapterData[];
     hasFunds: boolean;
@@ -77,19 +89,27 @@ function truncateHash(hash: string): string {
 }
 
 export default function CrossChainSafeHaven() {
+    const { address: connectedWallet } = useAccount();
     const [baseData, setBaseData] = useState<SafeHavenData | null>(null);
     const [portfolioData, setPortfolioData] = useState<PortfolioData | null>(null);
     const [bridgeStatus, setBridgeStatus] = useState<BridgeStatusData | null>(null);
     const [loading, setLoading] = useState(true);
 
+    const { data: hash, isPending, writeContract } = useWriteContract();
+
+    const { isLoading: isConfirming, isSuccess: isConfirmed } = useWaitForTransactionReceipt({
+        hash,
+    });
+
     useEffect(() => {
         const fetchAll = async () => {
             try {
+                const walletQuery = connectedWallet ? `?wallet=${connectedWallet}` : '';
                 const [baseRes, portRes, bridgeRes] = await Promise.all([
-                    fetch('/api/base-safe-haven').then(r => r.ok ? r.json() : null).catch(() => null),
-                    fetch('/api/portfolio/live?wallet=0x0000000000000000000000000000000000000000')
+                    fetch(`/api/base-safe-haven${walletQuery}`).then(r => r.ok ? r.json() : null).catch(() => null),
+                    fetch(`/api/portfolio/live${walletQuery}`)
                         .then(r => r.ok ? r.json() : null).catch(() => null),
-                    fetch('/api/bridge-status').then(r => r.ok ? r.json() : null).catch(() => null),
+                    fetch(`/api/bridge-status${walletQuery}`).then(r => r.ok ? r.json() : null).catch(() => null),
                 ]);
                 if (baseRes) setBaseData(baseRes);
                 if (portRes) setPortfolioData(portRes);
@@ -99,9 +119,20 @@ export default function CrossChainSafeHaven() {
         };
 
         fetchAll();
-        const iv = setInterval(fetchAll, 15_000);
+        const iv = setInterval(fetchAll, 10_000);
         return () => clearInterval(iv);
-    }, []);
+    }, [connectedWallet, isConfirmed]);
+
+    const handleClaim = () => {
+        if (!baseData?.shieldVault || !connectedWallet) return;
+        
+        writeContract({
+            address: baseData.shieldVault as `0x${string}`,
+            abi: SHIELD_VAULT_ABI,
+            functionName: 'claimCrossChainFunds',
+            chainId: 84532, // Base Sepolia
+        });
+    };
 
     const arbBalance = portfolioData?.chainBreakdown?.arbitrum ?? 0;
     const baseBalance = portfolioData?.chainBreakdown?.base ?? baseData?.totalBalance ?? 0;
@@ -111,12 +142,17 @@ export default function CrossChainSafeHaven() {
     const basePercent = globalTotal > 0 ? (baseBalance / globalTotal) * 100 : 0;
     const ccipPercent = globalTotal > 0 ? (ccipPending / globalTotal) * 100 : 0;
     const totalBridgeCount = bridgeStatus?.emergencyBridgeCount ?? baseData?.emergencyBridgeCount ?? 0;
+    const unclaimedFunds = baseData?.unclaimedCrossChainFunds ?? 0;
+    
     const hasBridged = totalBridgeCount > 0 || baseBalance > 0.001 || ccipPending > 0;
-    const isCcipPending = ccipPending > 0.001;
+    const canClaim = unclaimedFunds > 0.001;
+    // If we have unclaimed funds, we are no longer "pending" in the eyes of the user
+    const isCcipPending = ccipPending > 0.001 && !canClaim;
 
-    // Merge pending messages from bridge-status API (primary) or base-safe-haven (fallback)
-    const pendingMessages: PendingBridgeMessage[] =
-        bridgeStatus?.pendingMessages ?? baseData?.pendingBridgeMessages ?? [];
+    // Filter pending messages: if a message's amount matches (roughly) our unclaimed funds, 
+    // it's likely already arrived, so we don't show it as pending anymore.
+    const pendingMessages: PendingBridgeMessage[] = (bridgeStatus?.pendingMessages ?? baseData?.pendingBridgeMessages ?? [])
+        .filter(msg => !canClaim || Math.abs(msg.amount - unclaimedFunds) > 0.1);
 
     // Show up to 3 most recent completed messages
     const recentCompleted = (bridgeStatus?.completedMessages ?? []).slice(0, 3);
@@ -140,7 +176,11 @@ export default function CrossChainSafeHaven() {
                     </div>
                 </div>
                 <div className="flex items-center gap-2">
-                    {isCcipPending ? (
+                    {canClaim ? (
+                        <span className="text-[10px] bg-emerald-500 text-white border border-emerald-400 rounded-full px-2.5 py-1 font-bold animate-pulse">
+                            READY TO CLAIM
+                        </span>
+                    ) : isCcipPending ? (
                         <span className="text-[10px] bg-amber-500/10 text-amber-400 border border-amber-500/20 rounded-full px-2.5 py-1 font-medium animate-pulse">
                             BRIDGING...
                         </span>
@@ -163,6 +203,34 @@ export default function CrossChainSafeHaven() {
                     </div>
                 ) : (
                     <>
+                        {/* Stateful Claim Alert */}
+                        {canClaim && (
+                            <div className="p-4 rounded-xl bg-emerald-500/10 border border-emerald-500/30 flex flex-col sm:flex-row items-center justify-between gap-4 animate-in fade-in slide-in-from-top-2 duration-500">
+                                <div className="flex items-center gap-3">
+                                    <div className="w-10 h-10 rounded-full bg-emerald-500/20 flex items-center justify-center text-xl">
+                                        💰
+                                    </div>
+                                    <div>
+                                        <p className="text-xs font-bold text-emerald-400 uppercase tracking-wider">Bridge Success!</p>
+                                        <p className="text-[10px] text-zinc-400 mt-0.5">
+                                            ${unclaimedFunds.toLocaleString('en-US', { minimumFractionDigits: 2 })} has arrived on Base.
+                                        </p>
+                                    </div>
+                                </div>
+                                <button
+                                    onClick={handleClaim}
+                                    disabled={isPending || isConfirming}
+                                    className={`px-6 py-2.5 rounded-lg text-xs font-bold uppercase tracking-widest transition-all ${
+                                        isPending || isConfirming
+                                            ? 'bg-zinc-800 text-zinc-500 cursor-not-allowed'
+                                            : 'bg-emerald-500 text-white hover:bg-emerald-400 shadow-lg shadow-emerald-500/20'
+                                    }`}
+                                >
+                                    {isPending ? 'Confirming...' : isConfirming ? 'Claiming...' : 'Claim Funds'}
+                                </button>
+                            </div>
+                        )}
+
                         {/* Chain Proportion Bar */}
                         <div className="space-y-2">
                             <div className="flex items-center justify-between text-[9px] text-zinc-500">
@@ -202,7 +270,6 @@ export default function CrossChainSafeHaven() {
 
                         {/* CCIP Flow Diagram */}
                         <div className="flex items-center justify-center gap-2">
-                            {/* Arbitrum Node */}
                             <div className="flex flex-col items-center gap-1.5">
                                 <div className="w-14 h-14 rounded-xl bg-zinc-800/80 border border-blue-500/30 flex flex-col items-center justify-center gap-0.5">
                                     <span className="text-base">⚡</span>
@@ -213,7 +280,6 @@ export default function CrossChainSafeHaven() {
                                 </span>
                             </div>
 
-                            {/* Bridge Arrow */}
                             <div className="flex flex-col items-center gap-1 flex-1 max-w-[120px]">
                                 <div className="relative w-full flex items-center justify-center">
                                     <div className={`w-full h-px ${hasBridged ? 'bg-gradient-to-r from-blue-500/60 via-cyan-400/80 to-emerald-500/60' : 'bg-zinc-700'}`} />
@@ -233,18 +299,13 @@ export default function CrossChainSafeHaven() {
                                     </span>
                                     {hasBridged && !isCcipPending && <span className="w-1 h-1 rounded-full bg-cyan-400 animate-pulse" />}
                                 </div>
-                                {isCcipPending ? (
+                                {isCcipPending && (
                                     <span className="text-[9px] font-mono text-amber-400">
                                         ${ccipPending.toLocaleString('en-US', { minimumFractionDigits: 2 })}
                                     </span>
-                                ) : (totalBridgeCount > 0 && (
-                                    <span className="text-[8px] text-zinc-600">
-                                        {totalBridgeCount}x bridged
-                                    </span>
-                                ))}
+                                )}
                             </div>
 
-                            {/* Base Node */}
                             <div className="flex flex-col items-center gap-1.5">
                                 <div className={`w-14 h-14 rounded-xl border flex flex-col items-center justify-center gap-0.5 transition-all duration-500 ${hasBridged
                                     ? 'bg-emerald-500/10 border-emerald-500/40'
@@ -261,59 +322,9 @@ export default function CrossChainSafeHaven() {
                             </div>
                         </div>
 
-                        {/* === Pending Bridge Messages (Per-Message Tracking) === */}
-                        {pendingMessages.length > 0 && (
-                            <div className="space-y-2 pt-1">
-                                <div className="flex items-center gap-1.5">
-                                    <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
-                                    <p className="text-[10px] text-amber-400 uppercase tracking-widest font-medium">
-                                        Active Bridge Transfers
-                                    </p>
-                                </div>
-                                {pendingMessages.map((msg) => {
-                                    const cfg = STATUS_CONFIG[msg.status] ?? STATUS_CONFIG.UNKNOWN;
-                                    return (
-                                        <a
-                                            key={msg.messageId}
-                                            href={msg.ccipExplorerUrl}
-                                            target="_blank"
-                                            rel="noopener noreferrer"
-                                            className={`block px-3 py-2.5 rounded-xl ${cfg.bgColor} border ${cfg.borderColor} hover:brightness-110 transition-all`}
-                                        >
-                                            <div className="flex items-center justify-between">
-                                                <div className="flex items-center gap-2">
-                                                    <span className={`text-[10px] font-medium ${cfg.color} ${cfg.pulse ? 'animate-pulse' : ''}`}>
-                                                        {cfg.label}
-                                                    </span>
-                                                    <span className="text-[9px] text-zinc-600 font-mono">
-                                                        {truncateHash(msg.messageId)}
-                                                    </span>
-                                                </div>
-                                                <span className={`text-xs font-mono font-medium ${cfg.color}`}>
-                                                    ${msg.amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 4 })}
-                                                </span>
-                                            </div>
-                                            <div className="flex items-center justify-between mt-1">
-                                                <span className="text-[9px] text-zinc-600">
-                                                    Arbitrum → {msg.destinationChain}
-                                                </span>
-                                                <span className="text-[9px] text-cyan-600 flex items-center gap-1">
-                                                    Track on CCIP
-                                                    <svg width="8" height="8" viewBox="0 0 10 10" fill="currentColor" className="opacity-60">
-                                                        <path d="M5.5 1H9v3.5M9 1L4 6M2 2H1v7h7V8" stroke="currentColor" strokeWidth="1.4" fill="none" strokeLinecap="round" strokeLinejoin="round" />
-                                                    </svg>
-                                                </span>
-                                            </div>
-                                        </a>
-                                    );
-                                })}
-                            </div>
-                        )}
-
-                        {/* Chain Details — Two Columns */}
+                        {/* Chain Details */}
                         {(baseData || arbBalance > 0) && (
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-2">
-                                {/* Arbitrum Column */}
                                 <div className="space-y-2">
                                     <div className="flex items-center gap-1.5 mb-2">
                                         <span className="w-2 h-2 rounded-full bg-blue-500" />
@@ -328,13 +339,9 @@ export default function CrossChainSafeHaven() {
                                                 ${arbBalance.toLocaleString('en-US', { minimumFractionDigits: 4, maximumFractionDigits: 4 })}
                                             </span>
                                         </div>
-                                        <p className="text-[9px] text-zinc-600 mt-1">
-                                            Aave · Compound · Morpho · YieldMax
-                                        </p>
                                     </div>
                                 </div>
 
-                                {/* Base Column */}
                                 <div className="space-y-2">
                                     <div className="flex items-center gap-1.5 mb-2">
                                         <span className="w-2 h-2 rounded-full bg-emerald-500" />
@@ -344,19 +351,17 @@ export default function CrossChainSafeHaven() {
                                     </div>
                                     {baseData ? (
                                         <div className="space-y-1.5">
-                                            {/* Escrow Balance */}
-                                            {baseData.escrowBalance > 0.001 && (
-                                                <div className="flex items-center justify-between px-3 py-2 rounded-xl bg-amber-500/5 border border-amber-500/20">
+                                            {canClaim && (
+                                                <div className="flex items-center justify-between px-3 py-2 rounded-xl bg-emerald-500/20 border border-emerald-500/40">
                                                     <div className="flex items-center gap-1.5">
-                                                        <span className="text-xs">🌉</span>
-                                                        <span className="text-[10px] text-amber-400">Bridge Escrow</span>
+                                                        <span className="text-xs">💰</span>
+                                                        <span className="text-[10px] text-emerald-400 font-bold">Unclaimed Bridge</span>
                                                     </div>
-                                                    <span className="text-xs font-mono font-medium text-amber-400">
-                                                        ${baseData.escrowBalance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 4 })}
+                                                    <span className="text-xs font-mono font-medium text-emerald-400">
+                                                        ${unclaimedFunds.toLocaleString('en-US', { minimumFractionDigits: 2 })}
                                                     </span>
                                                 </div>
                                             )}
-                                            {/* Base Adapters */}
                                             {baseData.adapters.filter(a => a.balance > 0.001).map(adapter => {
                                                 const icon = PROTOCOL_ICONS[adapter.name] || '⚪';
                                                 const displayName = adapter.name.replace('Adapter', '');
@@ -372,60 +377,20 @@ export default function CrossChainSafeHaven() {
                                                     </div>
                                                 );
                                             })}
-                                            {baseData.adapters.every(a => a.balance <= 0.001) && baseData.escrowBalance <= 0.001 && (
-                                                <div className="px-3 py-2.5 rounded-xl bg-zinc-800/40 border border-zinc-700/40">
-                                                    <div className="flex items-center justify-between">
-                                                        <span className="text-[10px] text-zinc-500">Safe Haven Vault</span>
-                                                        <span className="text-xs font-mono text-zinc-600">$0.00</span>
-                                                    </div>
-                                                    <p className="text-[9px] text-zinc-600 mt-1">
-                                                        Awaiting CCIP evacuation
-                                                    </p>
-                                                </div>
-                                            )}
                                         </div>
                                     ) : (
-                                        <div className="px-3 py-2.5 rounded-xl bg-zinc-800/40 border border-zinc-700/40">
-                                            <span className="text-[10px] text-zinc-600">Unreachable</span>
+                                        <div className="px-3 py-2.5 rounded-xl bg-zinc-800/40 border border-zinc-700/40 text-center">
+                                            <span className="text-[10px] text-zinc-600">No active funds on Base</span>
                                         </div>
                                     )}
                                 </div>
                             </div>
                         )}
 
-                        {/* === Recent Completed Bridges === */}
-                        {recentCompleted.length > 0 && (
-                            <div className="space-y-1.5 pt-1">
-                                <p className="text-[9px] text-zinc-600 uppercase tracking-widest font-medium">
-                                    Recent Bridges
-                                </p>
-                                {recentCompleted.map((msg) => {
-                                    const cfg = STATUS_CONFIG[msg.status] ?? STATUS_CONFIG.SUCCESS;
-                                    return (
-                                        <a
-                                            key={msg.messageId}
-                                            href={msg.ccipExplorerUrl}
-                                            target="_blank"
-                                            rel="noopener noreferrer"
-                                            className="flex items-center justify-between px-3 py-1.5 rounded-lg bg-zinc-800/30 border border-zinc-700/30 hover:border-zinc-600/50 transition-all"
-                                        >
-                                            <div className="flex items-center gap-2">
-                                                <span className={`w-1.5 h-1.5 rounded-full ${msg.status === 'SUCCESS' ? 'bg-emerald-500' : 'bg-red-500'}`} />
-                                                <span className="text-[9px] text-zinc-500 font-mono">{truncateHash(msg.messageId)}</span>
-                                            </div>
-                                            <span className={`text-[10px] font-mono ${cfg.color}`}>
-                                                ${msg.amount.toLocaleString('en-US', { minimumFractionDigits: 2 })}
-                                            </span>
-                                        </a>
-                                    );
-                                })}
-                            </div>
-                        )}
-
-                        {/* Footer — CCIP Explorer Link */}
+                        {/* Footer */}
                         <div className="pt-2 border-t border-zinc-800/60 flex items-center justify-between">
-                            <p className="text-[9px] text-zinc-600">
-                                Server-side CCIP tracking · On-chain events + Chainlink API
+                            <p className="text-[9px] text-zinc-600 font-medium">
+                                STATE-DRIVEN CCIP TRACKING · AUTOMATIC CLAIMS
                             </p>
                             <a
                                 href="https://ccip.chain.link"

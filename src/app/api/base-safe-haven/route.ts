@@ -5,12 +5,12 @@ import { fetchBridgeStatus } from "@/lib/bridge-status";
 
 // Base Sepolia deployed contract addresses (with depositFor support)
 const BASE_ADDRESSES = {
-    shieldVault: "0x2EDEe329359aC421059B09C4049A750CD71831E1" as Address,
-    shieldBridge: "0x87Ed95Ef9fB41BeA722f4575f54b4c24EB38F679" as Address,
-    aaveAdapter: "0xd1C409AeE097ba8d1590e40a6c8fF4908819BD35" as Address,
-    compoundAdapter: "0xeCD4101D1E7914F72c0fd9fbD00ad9FFb3093A8B" as Address,
-    morphoAdapter: "0xE7f4b7eE9308733C7c078697999ab50812ab5F73" as Address,
-    yieldMaxAdapter: "0x383A628338e299bB98d616aF3258788b1898EA80" as Address,
+    shieldVault: "0xf723Cf2629A7461Ad92c7eF6cAD51cd853d332a7" as Address,
+    shieldBridge: "0x83995931A5BE0cc67811ed1D4714F4eEE213EE8D" as Address,
+    aaveAdapter: "0xb62Ea26b218166bfd1808E76BEF5222D7E4c5aCd" as Address,
+    compoundAdapter: "0xaa862cddE53DCD2878Dc49B1c0618EA23eEcdF1B" as Address,
+    morphoAdapter: "0x184B015698FB9Cd5f5c9CAE1cdBCe0d7E0e5Ee46" as Address,
+    yieldMaxAdapter: "0x28B38104F3cD62EABE17E927d61DbC50B834b1B7" as Address,
 };
 
 const ADAPTER_ABI = [
@@ -150,7 +150,10 @@ export async function GET(request: NextRequest) {
             ccipExplorerUrl: string;
         }> = [];
         try {
-            const bridgeData = await fetchBridgeStatus();
+            // FIX: Pass the wallet to fetchBridgeStatus to filter pending funds correctly
+            const bridgeData = await fetchBridgeStatus({ 
+                wallet: wallet || undefined 
+            });
             ccipPendingBalance = bridgeData.totalPendingAmount;
             pendingBridgeMessages = bridgeData.pendingMessages;
         } catch (err) {

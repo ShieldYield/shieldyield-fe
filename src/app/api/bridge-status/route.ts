@@ -7,9 +7,13 @@ import { fetchBridgeStatus } from "@/lib/bridge-status";
 
 export async function GET(request: NextRequest) {
     const isNoCache = request.headers.get("cache-control") === "no-cache";
+    const wallet = request.nextUrl.searchParams.get("wallet") || undefined;
 
     try {
-        const data = await fetchBridgeStatus({ noCache: isNoCache });
+        const data = await fetchBridgeStatus({ 
+            noCache: isNoCache,
+            wallet: wallet 
+        });
 
         return NextResponse.json(data, {
             headers: {
