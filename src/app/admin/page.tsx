@@ -7,7 +7,7 @@ import { VaultStatusCard } from "@/components/Admin/VaultStatusCard";
 import { RemovePoolCard } from "@/components/Admin/RemovePoolCard";
 import { EmergencyBridgeCard } from "@/components/Admin/EmergencyBridgeCard";
 
-const SHIELD_VAULT = "0x1997fFea2efCca2F052F5A600c6315B763E5adC1";
+const SHIELD_VAULT = "0xE2b7f9E85ee0390B2c3bC874301CAeB941Fc88eB";
 
 const SHIELD_VAULT_ABI = [
     {

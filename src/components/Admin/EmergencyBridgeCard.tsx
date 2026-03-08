@@ -4,8 +4,8 @@ import { useState } from "react";
 import { useWriteContract, useWaitForTransactionReceipt, useBalance, useAccount } from "wagmi";
 import { parseUnits, formatUnits } from "viem";
 
-const SHIELD_BRIDGE = "0x" as const; // TODO: Replace with actual ShieldBridge address
-const USDC_ARBITRUM = "0xaf88d065e77c8cC2239327C5EDb3A432268e5831"; // Arbitrum USDC
+const SHIELD_BRIDGE = "0xa66A087dFb94a198c793B65E66C412F063C15476" as const;
+const USDC_ARBITRUM = "0xA8C0c11bf64AF62CDCA6f93D3769B88BdD7cb93D"; // CCIP-BnM on Arb Sepolia
 
 const SHIELD_BRIDGE_ABI = [
     {

@@ -16,8 +16,8 @@ import { arbitrumSepolia } from "viem/chains";
 // Contract Addresses (Arbitrum Sepolia)
 // ============================================================================
 
-const SHIELD_BRIDGE = "0xA5D0CF3DC85538FfC93EF8941819e2b1b0460387" as const;
-const USDC_ADDRESS = "0xaf88d065e77c8cC2239327C5EDb3A432268e5831" as const;
+const SHIELD_BRIDGE = "0xa66A087dFb94a198c793B65E66C412F063C15476" as const;
+const USDC_ADDRESS = "0xA8C0c11bf64AF62CDCA6f93D3769B88BdD7cb93D" as const;
 
 // ============================================================================
 // ABI (Minimal — only what we need)

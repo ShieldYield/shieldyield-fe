@@ -6,6 +6,7 @@ interface LiveYieldTickerProps {
     totalBalance: number;
     weightedApy: number; // weighted average APY across all adapters
     totalAccruedYield: number;
+    lastDepositTime: number; // timestamp in seconds
     adapters: Record<string, any>;
 }
 
@@ -20,29 +21,47 @@ export default function LiveYieldTicker({
     totalBalance,
     weightedApy,
     totalAccruedYield,
+    lastDepositTime,
     adapters,
 }: LiveYieldTickerProps) {
     // Yield per second = (balance × APY%) / seconds_in_year
     const yieldPerSecond = (totalBalance * (weightedApy / 100)) / 31_536_000;
 
-    const [displayYield, setDisplayYield] = useState(totalAccruedYield);
+    // Menghitung titik awal yang "Live":
+    // Base Yield dari Chain + (Hasil Per Detik * Selisih Detik sejak Update Terakhir)
+    const getInitialLiveYield = () => {
+        if (totalAccruedYield === 0 && lastDepositTime === 0) return 0;
+        
+        // Jika ada yield di chain, gunakan itu. Jika tidak, hitung perkiraan sejak deposit.
+        const base = totalAccruedYield > 0 ? totalAccruedYield : 0;
+        
+        // Kita gunakan Date.now() vs lastDepositTime (atau lastUpdated dari API)
+        // Catatan: lastDepositTime dalam detik, Date.now dalam ms
+        const nowInSeconds = Date.now() / 1000;
+        const secondsElapsed = Math.max(0, nowInSeconds - lastDepositTime);
+        
+        return base + (secondsElapsed * yieldPerSecond);
+    };
+
+    const [displayYield, setDisplayYield] = useState(getInitialLiveYield);
     const lastUpdateRef = useRef(Date.now());
-    const baseYieldRef = useRef(totalAccruedYield);
+    const baseYieldRef = useRef(getInitialLiveYield());
 
-    // Sync base when props change (new data from poll)
+    // Sync base saat data API masuk
     useEffect(() => {
-        baseYieldRef.current = totalAccruedYield;
+        const initial = getInitialLiveYield();
+        baseYieldRef.current = initial;
         lastUpdateRef.current = Date.now();
-        setDisplayYield(totalAccruedYield);
-    }, [totalAccruedYield]);
+        setDisplayYield(initial);
+    }, [totalAccruedYield, lastDepositTime, yieldPerSecond]);
 
-    // Client-side interpolation: tick every 100ms
+    // Client-side interpolation: tick setiap 100ms
     useEffect(() => {
         if (yieldPerSecond <= 0) return;
 
         const interval = setInterval(() => {
             const elapsed = (Date.now() - lastUpdateRef.current) / 1000;
-            const interpolated = baseYieldRef.current + elapsed * yieldPerSecond;
+            const interpolated = baseYieldRef.current + (elapsed * yieldPerSecond);
             setDisplayYield(interpolated);
         }, 100);
 

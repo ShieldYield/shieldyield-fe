@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createPublicClient, http, formatUnits, type Address } from "viem";
 import { arbitrumSepolia } from "viem/chains";
 import * as fs from "fs";
+import { fetchBridgeStatus, type BridgeMessage } from "@/lib/bridge-status";
 
 // ============================================================================
 // DeFiLlama APY Integration
@@ -128,17 +129,15 @@ async function fetchDefiLlamaApys(): Promise<DefiLlamaResult> {
 // Contract Addresses (Arbitrum Sepolia)
 // ============================================================================
 
-const SHIELD_VAULT = "0xFb81acFdCF900008E992ca49b57accDBaef3De95" as const;
-const RISK_REGISTRY = "0xB66fC87e8e46acF6478f6924Ea8D87331E638BdD" as const;
+const SHIELD_VAULT = "0xE2b7f9E85ee0390B2c3bC874301CAeB941Fc88eB" as const;
+const RISK_REGISTRY = "0xD5Ebe945197198cAE3846444f2c158981C7450F2" as const;
 
 // Known adapter addresses on Arbitrum Sepolia → proper display names.
-// Contracts return "_0xXXXX" (hex prefix) instead of their protocol name,
-// so we resolve here before falling back to the contract's name() return value.
 const KNOWN_ADAPTER_NAMES: Record<string, string> = {
-  "0xe47044dac29e8443e63ae1b34cdb647f2ce8a230": "AaveAdapter",
-  "0x2a4dc8c6a0e45b0e6824d723250f943bcad85625": "CompoundAdapter",
-  "0x43567d080dc2503a1e46446898e14f22d1fb576c": "MorphoAdapter",
-  "0x2f3daa21af1c1d035789ba157802c02fa54294af": "YieldMaxAdapter",
+  "0xc085b5604561dee55c15a002ffc8782450429635": "AaveAdapter",
+  "0xd7069532cd6c4bca265aa12db46c68c56e596649": "CompoundAdapter",
+  "0x35ccd4bf836ca9482ad7db9f66d68dca77f03857": "MorphoAdapter",
+  "0xf481704d78a155b31083ecf580d678790fa3a1a4": "YieldMaxAdapter",
 };
 
 // We no longer hardcode ADAPTERS here, we fetch them dynamically from ShieldVault!
@@ -309,17 +308,10 @@ export async function GET(request: NextRequest) {
 
   const walletLower = wallet.toLowerCase();
 
-  // Check cache — skip if mock server has active inject scenario
-  let hasMockInject = false;
-  try {
-    const mockCheck = await fetch("http://localhost:3099/inject-state", { signal: AbortSignal.timeout(300) });
-    if (mockCheck.ok) {
-      const { scenario } = await mockCheck.json() as { scenario?: { type?: string } | null };
-      hasMockInject = !!scenario?.type;
-    }
-  } catch { /* mock server not running */ }
+  // Force bypass cache if frontend explicitly requests it (e.g. on scenario change)
+  const isNoCache = request.headers.get("cache-control") === "no-cache";
 
-  if (!hasMockInject && cache && cache.wallet === walletLower && Date.now() - cache.timestamp < CACHE_TTL_MS) {
+  if (!isNoCache && cache && cache.wallet === walletLower && Date.now() - cache.timestamp < CACHE_TTL_MS) {
     return NextResponse.json(cache.data, { headers: { "X-Cache": "HIT" } });
   }
 
@@ -513,33 +505,33 @@ export async function GET(request: NextRequest) {
     const totalChange = calcChange(totalValueUsd, previousTotalValue);
     previousTotalValue = totalValueUsd;
 
-    // Override riskScores if mock server has an active inject scenario
-    try {
-      const mockRes = await fetch("http://localhost:3099/inject-state", {
-        signal: AbortSignal.timeout(500),
-      });
-      if (mockRes.ok) {
-        const mockData = await mockRes.json() as { scenario?: { type?: string } | null };
-        const scenarioType = mockData.scenario?.type;
-        if (scenarioType === "warning") {
-          riskScores["MorphoAdapter"] = { score: 65, level: "WARNING" };
-        } else if (scenarioType === "critical") {
-          riskScores["YieldMaxAdapter"] = { score: 85, level: "CRITICAL" };
-        }
-      }
-    } catch { /* mock server not running — keep chain scores */ }
-
-    // Phase 3: Fetch Base Sepolia balance for global portfolio
+    // Phase 3: Fetch Base Sepolia balance + bridge pending data for global portfolio
     let baseSepoliaBalance = 0;
-    try {
-      const baseRes = await fetch(`http://localhost:3000/api/base-safe-haven?wallet=${wallet}`, { signal: AbortSignal.timeout(3000) });
-      if (baseRes.ok) {
-        const baseData = await baseRes.json();
-        baseSepoliaBalance = baseData.totalBalance ?? 0;
-      }
-    } catch { /* Base Sepolia unreachable — show 0 */ }
+    let pendingBridgeAmount = 0;
+    let unclaimedCrossChainFunds = 0;
+    let pendingBridgeMessages: BridgeMessage[] = [];
+    let completedBridgeMessages: BridgeMessage[] = [];
 
-    const globalTotalValueUsd = totalValueUsd + baseSepoliaBalance;
+    try {
+      // Fetch Base balance and bridge status in parallel (no localhost fetch — uses shared module)
+      const [baseRes, bridgeData] = await Promise.all([
+        fetch(`http://localhost:3000/api/base-safe-haven?wallet=${wallet}`, { signal: AbortSignal.timeout(5000) }).catch(() => null),
+        fetchBridgeStatus({ wallet: wallet as string, noCache: isNoCache }).catch(() => null),
+      ]);
+      if (baseRes?.ok) {
+        const baseData = await baseRes.json();
+        // totalBalance precisely represents the user's specific available + claimable funds
+        baseSepoliaBalance = baseData.totalBalance ?? 0;
+        unclaimedCrossChainFunds = baseData.unclaimedCrossChainFunds ?? 0;
+      }
+      if (bridgeData) {
+        pendingBridgeAmount = bridgeData.totalPendingAmount;
+        pendingBridgeMessages = bridgeData.pendingMessages;
+        completedBridgeMessages = bridgeData.completedMessages;
+      }
+    } catch { /* Base Sepolia / bridge-status unreachable — show 0 */ }
+
+    const globalTotalValueUsd = totalValueUsd + baseSepoliaBalance + pendingBridgeAmount + unclaimedCrossChainFunds;
 
     const responseData = {
       totalValueUsd,
@@ -547,7 +539,12 @@ export async function GET(request: NextRequest) {
       chainBreakdown: {
         arbitrum: totalValueUsd,
         base: baseSepoliaBalance,
+        pendingBridge: pendingBridgeAmount,
+        unclaimedBase: unclaimedCrossChainFunds,
       },
+      lastDepositTime: userPosition ? Number(userPosition.lastDepositTime) : 0,
+      pendingBridgeMessages,
+      completedBridgeMessages,
       totalChangePercent: totalChange.changePercent,
       totalChangeDirection: totalChange.changeDirection,
       adapters,
