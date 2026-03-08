@@ -38,12 +38,12 @@ export default function VaultActions({ onSuccess }: { onSuccess?: () => void }) 
 
     // Refresh data on success
     useEffect(() => {
-        if (depositStep === 'success' || withdrawStep === 'success' || faucetStep === 'success') {
+        if (depositStep === 'success' || withdrawStep === 'success' || (faucetStep as string) === 'success') {
             refetch();
             onSuccess?.();
 
             // Auto-reset faucet UI state after a few seconds
-            if (faucetStep === 'success') {
+            if ((faucetStep as string) === 'success') {
                 const timer = setTimeout(() => resetFaucet(), 3000);
                 return () => clearTimeout(timer);
             }
@@ -194,8 +194,8 @@ export default function VaultActions({ onSuccess }: { onSuccess?: () => void }) 
                                 {usdcBalance < 10 && (
                                     <button
                                         onClick={() => claimFaucet()}
-                                        disabled={isFaucetPending || isFaucetConfirming || faucetStep === 'success'}
-                                        className={`text-xs px-2.5 py-1 rounded-md transition-all duration-200 flex items-center gap-1.5 ${faucetStep === 'success'
+                                        disabled={isFaucetPending || isFaucetConfirming || (faucetStep as string) === 'success'}
+                                        className={`text-xs px-2.5 py-1 rounded-md transition-all duration-200 flex items-center gap-1.5 ${(faucetStep as string) === 'success'
                                             ? 'bg-emerald-500/10 text-emerald-400'
                                             : faucetError
                                                 ? 'bg-red-500/10 text-red-400'
@@ -206,7 +206,7 @@ export default function VaultActions({ onSuccess }: { onSuccess?: () => void }) 
                                         {(isFaucetPending || isFaucetConfirming) && (
                                             <span className="w-3 h-3 border-2 border-current border-t-transparent rounded-full animate-spin" />
                                         )}
-                                        {faucetStep === 'success' ? 'Opened ✓' : faucetError ? 'Failed' : 'Get Test BnM'}
+                                        {(faucetStep as string) === 'success' ? 'Opened ✓' : faucetError ? 'Failed' : 'Get Test BnM'}
                                     </button>
                                 )}
                             </div>

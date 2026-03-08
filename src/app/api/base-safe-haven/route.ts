@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { createPublicClient, http, type Address } from "viem";
+import { createPublicClient, http, type Address, erc20Abi } from "viem";
 import { baseSepolia } from "viem/chains";
 
 // Base Sepolia deployed contract addresses (with depositFor support)
@@ -79,7 +79,7 @@ async function readAdapter(name: string, address: Address) {
 
 export async function GET() {
     try {
-        const [aave, compound, morpho, yieldMax, bridgeCount] = await Promise.all([
+        const [aave, compound, morpho, yieldMax, bridgeCount, escrowBalanceRaw] = await Promise.all([
             readAdapter("AaveAdapter",     BASE_ADDRESSES.aaveAdapter),
             readAdapter("CompoundAdapter", BASE_ADDRESSES.compoundAdapter),
             readAdapter("MorphoAdapter",   BASE_ADDRESSES.morphoAdapter),
@@ -89,10 +89,17 @@ export async function GET() {
                 abi: SHIELD_BRIDGE_ABI,
                 functionName: "emergencyBridgeCount",
             }).catch(() => 0n),
+            client.readContract({
+                address: "0x88A2d74F47a237a62e7A51cdDa67270CE381555e", // CCIP-BnM on Base Sepolia
+                abi: erc20Abi,
+                functionName: "balanceOf",
+                args: [BASE_ADDRESSES.shieldBridge],
+            }).catch(() => 0n),
         ]);
 
+        const escrowBalance = Number(escrowBalanceRaw) / 1e18;
         const adapters = [aave, compound, morpho, yieldMax];
-        const totalBalance = adapters.reduce((s, a) => s + a.balance, 0);
+        const totalBalance = adapters.reduce((s, a) => s + a.balance, 0) + escrowBalance;
         const primarySafeHaven = [aave, compound]; // Aave + Compound are the designated safe havens
 
         return NextResponse.json({
@@ -101,6 +108,7 @@ export async function GET() {
             shieldVault: BASE_ADDRESSES.shieldVault,
             shieldBridge: BASE_ADDRESSES.shieldBridge,
             emergencyBridgeCount: Number(bridgeCount),
+            escrowBalance,
             totalBalance,
             adapters,
             safeHavenAdapters: primarySafeHaven,

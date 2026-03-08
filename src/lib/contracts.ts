@@ -2,7 +2,7 @@
 // Contract Addresses (Arbitrum Sepolia)
 // ============================================================================
 
-export const SHIELD_VAULT_ADDRESS = '0xe6D20be65eA58e30eFCb8DBe677772959aAdFCd9' as const;
+export const SHIELD_VAULT_ADDRESS = '0xFb81acFdCF900008E992ca49b57accDBaef3De95' as const;
 export const MOCK_USDC_ADDRESS = '0xA8C0c11bf64AF62CDCA6f93D3769B88BdD7cb93D' as const; // CCIP-BnM on Arb Sepolia
 
 // ============================================================================

@@ -128,17 +128,17 @@ async function fetchDefiLlamaApys(): Promise<DefiLlamaResult> {
 // Contract Addresses (Arbitrum Sepolia)
 // ============================================================================
 
-const SHIELD_VAULT = "0xe6D20be65eA58e30eFCb8DBe677772959aAdFCd9" as const;
-const RISK_REGISTRY = "0x28B38104F3cD62EABE17E927d61DbC50B834b1B7" as const;
+const SHIELD_VAULT = "0xFb81acFdCF900008E992ca49b57accDBaef3De95" as const;
+const RISK_REGISTRY = "0xB66fC87e8e46acF6478f6924Ea8D87331E638BdD" as const;
 
 // Known adapter addresses on Arbitrum Sepolia → proper display names.
 // Contracts return "_0xXXXX" (hex prefix) instead of their protocol name,
 // so we resolve here before falling back to the contract's name() return value.
 const KNOWN_ADAPTER_NAMES: Record<string, string> = {
-  "0x8bdcad76328f00ab9a0712e8292fc1a1adcaa82a": "AaveAdapter",
-  "0xf2f0fa5fc187cfe6538d72c86cccada996956aaa": "CompoundAdapter",
-  "0x3f5b509a1d59814567fe370a471463c3aea38400": "MorphoAdapter",
-  "0xafd04a3a43a8b8d4523e3f1031071d1d378d8096": "YieldMaxAdapter",
+  "0xe47044dac29e8443e63ae1b34cdb647f2ce8a230": "AaveAdapter",
+  "0x2a4dc8c6a0e45b0e6824d723250f943bcad85625": "CompoundAdapter",
+  "0x43567d080dc2503a1e46446898e14f22d1fb576c": "MorphoAdapter",
+  "0x2f3daa21af1c1d035789ba157802c02fa54294af": "YieldMaxAdapter",
 };
 
 // We no longer hardcode ADAPTERS here, we fetch them dynamically from ShieldVault!
@@ -529,8 +529,25 @@ export async function GET(request: NextRequest) {
       }
     } catch { /* mock server not running — keep chain scores */ }
 
+    // Phase 3: Fetch Base Sepolia balance for global portfolio
+    let baseSepoliaBalance = 0;
+    try {
+      const baseRes = await fetch('http://localhost:3000/api/base-safe-haven', { signal: AbortSignal.timeout(3000) });
+      if (baseRes.ok) {
+        const baseData = await baseRes.json();
+        baseSepoliaBalance = baseData.totalBalance ?? 0;
+      }
+    } catch { /* Base Sepolia unreachable — show 0 */ }
+
+    const globalTotalValueUsd = totalValueUsd + baseSepoliaBalance;
+
     const responseData = {
       totalValueUsd,
+      globalTotalValueUsd,
+      chainBreakdown: {
+        arbitrum: totalValueUsd,
+        base: baseSepoliaBalance,
+      },
       totalChangePercent: totalChange.changePercent,
       totalChangeDirection: totalChange.changeDirection,
       adapters,

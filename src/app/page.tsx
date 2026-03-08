@@ -10,6 +10,8 @@ import { useSimMode } from '../context/SimModeContext';
 
 interface PortfolioData {
   totalValueUsd: number;
+  globalTotalValueUsd?: number;
+  chainBreakdown?: { arbitrum: number; base: number };
   totalChangePercent: number;
   totalChangeDirection: 'up' | 'down' | 'neutral';
   adapters: Record<string, any>;
@@ -152,7 +154,7 @@ export default function Home() {
 
   const adapters: Record<string, any> = portfolio?.adapters || {};
   const riskScores: Record<string, any> = portfolio?.riskScores || {};
-  const totalValue = portfolio?.totalValueUsd || 0;
+  const totalValue = portfolio?.globalTotalValueUsd ?? portfolio?.totalValueUsd ?? 0;
   const totalChangePercent = portfolio?.totalChangePercent ?? 0;
   const totalChangeDirection = portfolio?.totalChangeDirection ?? 'neutral';
 
