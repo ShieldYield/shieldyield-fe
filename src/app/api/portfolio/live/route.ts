@@ -532,7 +532,7 @@ export async function GET(request: NextRequest) {
       // Fetch current block to estimate user's deposit block
       const currentBlock = await client.getBlockNumber();
       const lastDepositTime = userPosition ? Number(userPosition.lastDepositTime) : 0;
-      
+
       // Rough estimate of the block when user deposited. 
       // Arb Sepolia generates ~4 blocks/sec. We add a buffer of 500 blocks (~2 mins).
       const depositBlockThreshold = lastDepositTime > 0
@@ -544,28 +544,28 @@ export async function GET(request: NextRequest) {
         fetch(`http://localhost:3000/api/base-safe-haven?wallet=${wallet}`, { signal: AbortSignal.timeout(5000) }).catch(() => null),
         fetchBridgeStatus({ wallet: wallet as string, noCache: isNoCache }).catch(() => null),
       ]);
-      
+
       if (baseRes?.ok) {
         const baseData = await baseRes.json();
         baseSepoliaBalance = baseData.totalBalance ?? 0;
         unclaimedCrossChainFunds = baseData.unclaimedCrossChainFunds ?? 0;
       }
-      
+
       if (bridgeData) {
         // FILTER: Only show system-initiated messages if:
         // 1. The user actually has a stake (shares > 0).
         // 2. The message occurred AFTER the user's latest deposit (using block threshold).
-        
+
         const isUserActive = userShares > 0n;
 
         const processMessage = (msg: BridgeMessage) => {
           const isSystem = msg.sender.toLowerCase() === SHIELD_VAULT.toLowerCase();
-          
+
           if (isSystem) {
-             // Block old system messages or if user has no stake
-             if (!isUserActive || msg.sourceBlockNumber < depositBlockThreshold) return null;
+            // Block old system messages or if user has no stake
+            if (!isUserActive || msg.sourceBlockNumber < depositBlockThreshold) return null;
           }
-          
+
           const userAmount = isSystem ? (msg.amount * userShareRatio) : msg.amount;
           if (userAmount < 0.000001) return null;
 
@@ -584,7 +584,7 @@ export async function GET(request: NextRequest) {
         pendingBridgeMessages = filteredPending;
         completedBridgeMessages = filteredCompleted;
       }
-    } catch (err) { 
+    } catch (err) {
       console.error("[portfolio/live] Bridge/Base fetch failed:", err);
     }
 
