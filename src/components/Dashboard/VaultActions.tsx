@@ -60,16 +60,7 @@ export default function VaultActions({ onSuccess }: { onSuccess?: () => void }) 
 
     const numericAmount = parseFloat(amount) || 0;
 
-    // -- Deposit logic --
-    const canDeposit = numericAmount >= MIN_DEPOSIT_USDC && numericAmount <= usdcBalance;
-    const isDepositBusy = isDepositPending || isDepositConfirming || (depositStep !== 'idle' && depositStep !== 'success' && depositStep !== 'error');
-
-    // -- Withdraw logic --
-    const canWithdraw = numericAmount > 0 && numericAmount <= totalShares;
-    const isWithdrawBusy = isWithdrawPending || isWithdrawConfirming || (withdrawStep !== 'idle' && withdrawStep !== 'success' && withdrawStep !== 'error');
-
-    const isClaimBusy = isClaimPending || isClaimConfirming || (claimStep !== 'idle' && claimStep !== 'success' && claimStep !== 'error');
-
+    // -- Action Handlers --
     const handleDeposit = () => {
         if (!canDeposit) return;
         deposit(numericAmount);
@@ -89,6 +80,13 @@ export default function VaultActions({ onSuccess }: { onSuccess?: () => void }) 
         }
     };
 
+    // Auto-switch tab if on Base and deposit was active
+    useEffect(() => {
+        if (isBase && activeTab === 'deposit') {
+            setActiveTab('withdraw');
+        }
+    }, [isBase, activeTab]);
+
     const getDepositStepLabel = () => {
         switch (depositStep) {
             case 'approving': return 'Approving USDC…';
@@ -107,107 +105,141 @@ export default function VaultActions({ onSuccess }: { onSuccess?: () => void }) 
             case 'waitingWithdraw': return 'Confirming…';
             case 'success': return 'Withdraw Successful ✓';
             case 'error': return 'Transaction Failed';
-            default: return 'Withdraw';
+            default: return isBase ? 'Withdraw to Base Wallet' : 'Withdraw';
         }
     };
 
     return (
-        <div className="bg-zinc-900/60 border border-zinc-800 rounded-3xl p-6">
+        <div className="bg-zinc-900/60 border border-zinc-800 rounded-3xl p-6 shadow-xl relative overflow-hidden">
+            {/* Background Accent for Base */}
+            {isBase && (
+                <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-500/5 rounded-full blur-3xl -z-10 pointer-events-none translate-x-1/2 -translate-y-1/2" />
+            )}
+
             {/* Header with Active Pools Badge & Network Switcher */}
-            <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center justify-between mb-6">
                 <div className="flex flex-col gap-1">
-                    <h3 className="text-sm font-medium text-zinc-300 uppercase tracking-widest">Vault Actions</h3>
+                    <h3 className="text-xs font-bold text-zinc-400 uppercase tracking-[0.2em]">Vault Actions</h3>
                     <div className="flex items-center gap-2">
-                        <span className={`w-1.5 h-1.5 rounded-full ${isBase ? 'bg-emerald-400' : 'bg-blue-400'}`} />
-                        <span className="text-[10px] text-zinc-500 font-medium uppercase tracking-tight">
-                            Network: {isBase ? 'Base Sepolia' : 'Arbitrum Sepolia'}
+                        <span className={`w-1.5 h-1.5 rounded-full ${isBase ? 'bg-emerald-400 animate-pulse' : 'bg-blue-400'}`} />
+                        <span className={`text-[10px] font-bold uppercase tracking-tight ${isBase ? 'text-emerald-400/80' : 'text-zinc-500'}`}>
+                            {isBase ? 'Base Safe Haven' : 'Arbitrum Main'}
                         </span>
                     </div>
                 </div>
-                {activePoolCount !== null && !isBase && (
-                    <span className="text-[10px] font-medium uppercase tracking-widest px-2.5 py-1 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-                        {activePoolCount} Active Pool{activePoolCount !== 1 ? 's' : ''}
-                    </span>
-                )}
-                {isBase && (
-                    <span className="text-[10px] font-medium uppercase tracking-widest px-2.5 py-1 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-                        Safe Haven Mode
-                    </span>
+                {isBase ? (
+                    <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 shadow-[0_0_10px_rgba(52,211,153,0.1)]">
+                        <span className="text-xs">🛡️</span>
+                        <span className="text-[9px] font-bold uppercase tracking-widest">Protected Mode</span>
+                    </div>
+                ) : (
+                    activePoolCount !== null && (
+                        <span className="text-[10px] font-bold uppercase tracking-widest px-2.5 py-1 rounded-full bg-blue-500/10 text-blue-400 border border-blue-500/20">
+                            {activePoolCount} Active Strategy
+                        </span>
+                    )
                 )}
             </div>
 
-            {/* Unclaimed Funds Alert */}
-            {unclaimedFunds > 0 && (
-                <div className="mb-6 p-4 rounded-2xl bg-cyan-500/10 border border-cyan-500/30 flex flex-col gap-3">
-                    <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                            <span className="text-lg">🎁</span>
-                            <div className="flex flex-col">
-                                <span className="text-xs font-bold text-cyan-400 uppercase tracking-tight">Bridged Funds Arrived!</span>
-                                <span className="text-[10px] text-zinc-400">You have funds waiting to be claimed on Base.</span>
+            {/* ─── CLAIM UI (Prominent on Base) ─── */}
+            <AnimatePresence>
+                {unclaimedFunds > 0 && (
+                    <motion.div 
+                        initial={{ opacity: 0, height: 0, marginBottom: 0 }}
+                        animate={{ opacity: 1, height: 'auto', marginBottom: 24 }}
+                        exit={{ opacity: 0, height: 0, marginBottom: 0 }}
+                        className="p-5 rounded-2xl bg-cyan-500/10 border border-cyan-500/30 flex flex-col gap-4 relative overflow-hidden group shadow-lg shadow-cyan-900/5"
+                    >
+                        {/* Shine effect */}
+                        <div className="absolute inset-0 bg-gradient-to-r from-transparent via-cyan-400/5 to-transparent -translate-x-full group-hover:animate-[shimmer_2s_infinite] pointer-events-none" />
+                        
+                        <div className="flex items-center justify-between relative z-10">
+                            <div className="flex items-center gap-3">
+                                <div className="w-10 h-10 rounded-xl bg-cyan-500/20 flex items-center justify-center text-xl shadow-inner">
+                                    🎁
+                                </div>
+                                <div className="flex flex-col">
+                                    <span className="text-xs font-black text-cyan-400 uppercase tracking-wider">Bridged Assets Ready</span>
+                                    <span className="text-[10px] text-zinc-400 font-medium">Oracle has finalized your rescue.</span>
+                                </div>
+                            </div>
+                            <div className="flex flex-col items-end">
+                                <span className="text-lg font-mono font-bold text-zinc-50">${unclaimedFunds.toLocaleString()}</span>
+                                <span className="text-[9px] text-cyan-400/60 font-bold uppercase">USDC-BnM</span>
                             </div>
                         </div>
-                        <span className="text-sm font-mono font-bold text-zinc-100">${unclaimedFunds.toFixed(2)}</span>
-                    </div>
-                    {!isBase ? (
+
+                        {!isBase ? (
+                            <button
+                                onClick={() => switchChain?.({ chainId: baseSepolia.id })}
+                                className="w-full py-3 bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-400 text-[10px] font-black uppercase tracking-[0.15em] rounded-xl border border-cyan-500/30 transition-all active:scale-[0.98] shadow-sm"
+                            >
+                                Switch Network to Claim
+                            </button>
+                        ) : (
+                            <button
+                                onClick={() => claimFunds()}
+                                disabled={isClaimBusy}
+                                className="w-full py-3 bg-cyan-500 hover:bg-cyan-400 text-zinc-950 text-[10px] font-black uppercase tracking-[0.15em] rounded-xl transition-all shadow-lg shadow-cyan-500/30 active:scale-[0.98] flex items-center justify-center gap-2"
+                            >
+                                {isClaimBusy && <span className="w-3 h-3 border-2 border-zinc-950 border-t-transparent rounded-full animate-spin" />}
+                                {isClaimBusy ? 'Processing Claim...' : 'Claim to Portfolio'}
+                            </button>
+                        )}
+                    </motion.div>
+                )}
+            </AnimatePresence>
+
+            {/* Tab Switcher (Only on Arbitrum) */}
+            {!isBase && (
+                <div className="flex gap-1 bg-zinc-800/60 rounded-xl p-1 mb-6">
+                    {(['deposit', 'withdraw'] as Tab[]).map((tab) => (
                         <button
-                            onClick={() => switchChain?.({ chainId: baseSepolia.id })}
-                            className="w-full py-2 bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-400 text-[10px] font-bold uppercase tracking-widest rounded-lg border border-cyan-500/20 transition-all"
+                            key={tab}
+                            onClick={() => setActiveTab(tab)}
+                            className={`relative flex-1 py-2.5 text-xs font-bold uppercase tracking-widest rounded-lg transition-colors duration-200 ${activeTab === tab
+                                ? 'text-zinc-50'
+                                : 'text-zinc-500 hover:text-zinc-300'
+                                }`}
                         >
-                            Switch to Base to Claim
+                            {activeTab === tab && (
+                                <motion.div
+                                    layoutId="vault-tab-bg"
+                                    className="absolute inset-0 bg-zinc-700/70 rounded-lg shadow-sm"
+                                    transition={{ type: 'spring', duration: 0.4, bounce: 0.15 }}
+                                />
+                            )}
+                            <span className="relative z-10">{tab}</span>
                         </button>
-                    ) : (
-                        <button
-                            onClick={() => claimFunds()}
-                            disabled={isClaimBusy}
-                            className="w-full py-2 bg-cyan-500 hover:bg-cyan-400 text-zinc-950 text-[10px] font-bold uppercase tracking-widest rounded-lg transition-all shadow-lg shadow-cyan-500/20"
-                        >
-                            {isClaimBusy ? 'Claiming...' : 'Claim to Base Vault'}
-                        </button>
-                    )}
+                    ))}
                 </div>
             )}
 
-            {/* Tab Switcher */}
-            <div className="flex gap-1 bg-zinc-800/60 rounded-xl p-1 mb-6">
-                {(['deposit', 'withdraw'] as Tab[]).map((tab) => (
-                    <button
-                        key={tab}
-                        onClick={() => setActiveTab(tab)}
-                        className={`relative flex-1 py-2.5 text-sm font-medium rounded-lg transition-colors duration-200 ${activeTab === tab
-                            ? 'text-zinc-50'
-                            : 'text-zinc-500 hover:text-zinc-300'
-                            }`}
-                    >
-                        {activeTab === tab && (
-                            <motion.div
-                                layoutId="vault-tab-bg"
-                                className="absolute inset-0 bg-zinc-700/70 rounded-lg"
-                                transition={{ type: 'spring', duration: 0.4, bounce: 0.15 }}
-                            />
-                        )}
-                        <span className="relative z-10 capitalize">{tab}</span>
-                    </button>
-                ))}
-            </div>
-
             <AnimatePresence mode="wait">
                 <motion.div
-                    key={activeTab}
+                    key={activeTab + (isBase ? '-base' : '-arb')}
                     initial={{ opacity: 0, y: 8 }}
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, y: -8 }}
                     transition={{ duration: 0.2 }}
                 >
+                    {/* Header for Base Mode Withdraw */}
+                    {isBase && (
+                        <div className="mb-4">
+                            <h4 className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-1">Portfolio Withdrawal</h4>
+                            <p className="text-[10px] text-zinc-600">Once claimed, you can withdraw your protected assets to your personal Base wallet.</p>
+                        </div>
+                    )}
+
                     {/* Balance Info */}
                     <div className="flex items-center justify-between mb-3">
-                        <span className="text-xs text-zinc-500 uppercase tracking-widest">
-                            {activeTab === 'deposit' ? 'Wallet USDC' : 'Vault Shares'}
+                        <span className="text-[10px] text-zinc-500 uppercase tracking-widest font-bold">
+                            {activeTab === 'deposit' ? 'Wallet Balance' : 'Portfolio Shares'}
                         </span>
-                        <span className="text-sm font-light text-zinc-300">
+                        <span className="text-xs font-mono font-medium text-zinc-300">
                             {activeTab === 'deposit'
                                 ? `${usdcBalance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USDC`
-                                : `${totalShares.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 6 })} shares`}
+                                : `${totalShares.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 4 })} shares`}
                         </span>
                     </div>
 
@@ -218,67 +250,57 @@ export default function VaultActions({ onSuccess }: { onSuccess?: () => void }) 
                             type="number"
                             min="0"
                             step="0.01"
-                            placeholder={activeTab === 'deposit' ? 'Enter USDC amount' : 'Enter shares amount'}
+                            placeholder={activeTab === 'deposit' ? '0.00' : '0.00'}
                             value={amount}
                             onChange={(e) => setAmount(e.target.value)}
                             disabled={isDepositBusy || isWithdrawBusy}
-                            className="w-full bg-zinc-800/50 border border-zinc-700 rounded-xl px-4 py-3.5 text-base font-light text-zinc-100 placeholder:text-zinc-600 focus:outline-none focus:border-cyan-500/50 focus:ring-1 focus:ring-cyan-500/20 transition-all disabled:opacity-50 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                            className="w-full bg-zinc-800/50 border border-zinc-700 rounded-2xl px-5 py-4 text-lg font-mono text-zinc-100 placeholder:text-zinc-700 focus:outline-none focus:border-zinc-600 focus:ring-1 focus:ring-zinc-600/20 transition-all disabled:opacity-50 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                         />
                         <button
                             onClick={handleMax}
                             disabled={isDepositBusy || isWithdrawBusy}
-                            className="absolute right-3 top-1/2 -translate-y-1/2 px-2.5 py-1 text-[10px] font-bold uppercase tracking-widest text-cyan-400 bg-cyan-500/10 rounded-md hover:bg-cyan-500/20 transition-colors disabled:opacity-50"
+                            className="absolute right-4 top-1/2 -translate-y-1/2 px-3 py-1.5 text-[10px] font-black uppercase tracking-widest text-zinc-400 bg-zinc-700/50 rounded-lg hover:bg-zinc-700 hover:text-zinc-200 transition-all disabled:opacity-50"
                         >
                             Max
                         </button>
                     </div>
 
                     {/* Preview Info */}
-                    {activeTab === 'deposit' && (
-                        <div className="flex flex-col gap-2 mb-4 px-1">
+                    {activeTab === 'deposit' && !isBase && (
+                        <div className="flex flex-col gap-2 mb-6 px-1">
                             <div className="flex items-center justify-between">
                                 <div className="flex items-center gap-2">
-                                    <span className="text-xs text-zinc-500">Min deposit</span>
-                                    <span className="text-xs text-zinc-400">{MIN_DEPOSIT_USDC} USDC</span>
+                                    <span className="text-[10px] text-zinc-500 uppercase font-bold">Min deposit</span>
+                                    <span className="text-[10px] text-zinc-400 font-mono">{MIN_DEPOSIT_USDC} USDC</span>
                                 </div>
 
                                 {usdcBalance < 10 && (
                                     <button
                                         onClick={() => claimFaucet()}
                                         disabled={isFaucetPending || isFaucetConfirming || (faucetStep as string) === 'success'}
-                                        className={`text-xs px-2.5 py-1 rounded-md transition-all duration-200 flex items-center gap-1.5 ${(faucetStep as string) === 'success'
-                                            ? 'bg-emerald-500/10 text-emerald-400'
+                                        className={`text-[9px] font-black uppercase tracking-widest px-3 py-1.5 rounded-lg transition-all duration-200 flex items-center gap-1.5 ${(faucetStep as string) === 'success'
+                                            ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
                                             : faucetError
-                                                ? 'bg-red-500/10 text-red-400'
-                                                : 'bg-cyan-500/10 text-cyan-400 hover:bg-cyan-500/20 active:scale-95'
+                                                ? 'bg-red-500/10 text-red-400 border border-red-500/20'
+                                                : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700 active:scale-95 border border-zinc-700'
                                             }`}
-                                        title={`Mint test BnM tokens directly to your wallet on ${isBase ? 'Base' : 'Arbitrum'}`}
                                     >
                                         {(isFaucetPending || isFaucetConfirming) && (
-                                            <span className="w-3 h-3 border-2 border-current border-t-transparent rounded-full animate-spin" />
+                                            <span className="w-2.5 h-2.5 border-2 border-current border-t-transparent rounded-full animate-spin" />
                                         )}
-                                        {(faucetStep as string) === 'success'
-                                            ? 'Minted 10 USDC ✓'
-                                            : faucetError
-                                                ? 'Mint Failed'
-                                                : isFaucetConfirming
-                                                    ? 'Confirm in Wallet...'
-                                                    : isFaucetPending
-                                                        ? 'Minting USDC...'
-                                                        : 'Mint 10 USDC'}
+                                        {(faucetStep as string) === 'success' ? 'USDC MINTED ✓' : 'MINT 10 TEST USDC'}
                                     </button>
                                 )}
                             </div>
 
-                            {/* Deposit Preview Estimation */}
                             {numericAmount > 0 && (
-                                <div className="flex items-center justify-between">
-                                    <span className="text-xs text-zinc-500">Est. shares received</span>
-                                    <span className="text-xs text-cyan-400 font-light">
+                                <div className="flex items-center justify-between pt-1">
+                                    <span className="text-[10px] text-zinc-500 uppercase font-bold">Shares to mint</span>
+                                    <span className="text-xs text-blue-400 font-mono">
                                         {isEstimating
-                                            ? <span className="inline-block w-12 h-3 bg-zinc-700 rounded animate-pulse" />
+                                            ? <span className="inline-block w-12 h-3 bg-zinc-800 rounded animate-pulse" />
                                             : estimatedShares !== null
-                                                ? `≈ ${estimatedShares.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 6 })} shares`
+                                                ? `≈ ${estimatedShares.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 4 })}`
                                                 : '—'
                                         }
                                     </span>
@@ -286,24 +308,24 @@ export default function VaultActions({ onSuccess }: { onSuccess?: () => void }) 
                             )}
                         </div>
                     )}
+
                     {activeTab === 'withdraw' && (
-                        <div className="flex flex-col gap-2 mb-4 px-1">
+                        <div className="flex flex-col gap-2 mb-6 px-1">
                             <div className="flex items-center justify-between">
-                                <span className="text-xs text-zinc-500">Vault balance</span>
-                                <span className="text-xs text-zinc-400">
+                                <span className="text-[10px] text-zinc-500 uppercase font-bold">Current value</span>
+                                <span className="text-xs text-zinc-400 font-mono">
                                     ${vaultBalance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USDC
                                 </span>
                             </div>
 
-                            {/* Withdraw Preview Estimation */}
                             {numericAmount > 0 && (
-                                <div className="flex items-center justify-between">
-                                    <span className="text-xs text-zinc-500">Est. USDC received</span>
-                                    <span className="text-xs text-orange-400 font-light">
+                                <div className="flex items-center justify-between pt-1">
+                                    <span className="text-[10px] text-zinc-500 uppercase font-bold">Assets to receive</span>
+                                    <span className={`text-xs font-mono ${isBase ? 'text-emerald-400' : 'text-orange-400'}`}>
                                         {isEstimating
-                                            ? <span className="inline-block w-12 h-3 bg-zinc-700 rounded animate-pulse" />
+                                            ? <span className="inline-block w-12 h-3 bg-zinc-800 rounded animate-pulse" />
                                             : estimatedUsdc !== null
-                                                ? `≈ ${estimatedUsdc.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 6 })} USDC`
+                                                ? `≈ $${estimatedUsdc.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
                                                 : '—'
                                         }
                                     </span>
@@ -313,56 +335,56 @@ export default function VaultActions({ onSuccess }: { onSuccess?: () => void }) 
                     )}
 
                     {/* Action Button */}
-                    {activeTab === 'deposit' ? (
+                    {activeTab === 'deposit' && !isBase ? (
                         <button
-                            id="vault-deposit-btn"
                             onClick={handleDeposit}
-                            disabled={!canDeposit || isDepositBusy || depositStep === 'success' || isBase}
-                            className={`w-full py-3.5 rounded-xl text-sm font-medium transition-all duration-200 ${depositStep === 'success'
-                                ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+                            disabled={!canDeposit || isDepositBusy || depositStep === 'success'}
+                            className={`w-full py-4 rounded-2xl text-xs font-black uppercase tracking-[0.2em] transition-all duration-200 ${depositStep === 'success'
+                                ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/30'
                                 : depositStep === 'error'
-                                    ? 'bg-red-500/20 text-red-400 border border-red-500/30'
-                                    : isBase
-                                        ? 'bg-zinc-800 text-zinc-600 cursor-not-allowed'
-                                        : canDeposit && !isDepositBusy
-                                            ? 'bg-cyan-500 hover:bg-cyan-400 text-zinc-950 shadow-lg shadow-cyan-500/20'
-                                            : 'bg-zinc-800 text-zinc-500 cursor-not-allowed'
+                                    ? 'bg-red-500/10 text-red-400 border border-red-500/30'
+                                    : canDeposit && !isDepositBusy
+                                        ? 'bg-blue-600 hover:bg-blue-500 text-white shadow-lg shadow-blue-900/20 active:scale-[0.98]'
+                                        : 'bg-zinc-800 text-zinc-600 cursor-not-allowed border border-zinc-700/50'
                                 }`}
                         >
                             <span className="flex items-center justify-center gap-2">
                                 {isDepositBusy && (
                                     <span className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
                                 )}
-                                {isBase ? 'Deposits Disabled on Base' : getDepositStepLabel()}
+                                {getDepositStepLabel()}
                             </span>
                         </button>
                     ) : (
-                        <button
-                            id="vault-withdraw-btn"
-                            onClick={handleWithdraw}
-                            disabled={!canWithdraw || isWithdrawBusy || withdrawStep === 'success'}
-                            className={`w-full py-3.5 rounded-xl text-sm font-medium transition-all duration-200 ${withdrawStep === 'success'
-                                ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
-                                : withdrawStep === 'error'
-                                    ? 'bg-red-500/20 text-red-400 border border-red-500/30'
-                                    : canWithdraw && !isWithdrawBusy
-                                        ? 'bg-orange-500 hover:bg-orange-400 text-zinc-950 shadow-lg shadow-orange-500/20'
-                                        : 'bg-zinc-800 text-zinc-500 cursor-not-allowed'
-                                }`}
-                        >
-                            <span className="flex items-center justify-center gap-2">
-                                {isWithdrawBusy && (
-                                    <span className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
-                                )}
-                                {getWithdrawStepLabel()}
-                            </span>
-                        </button>
+                        activeTab === 'withdraw' && (
+                            <button
+                                onClick={handleWithdraw}
+                                disabled={!canWithdraw || isWithdrawBusy || withdrawStep === 'success'}
+                                className={`w-full py-4 rounded-2xl text-xs font-black uppercase tracking-[0.2em] transition-all duration-200 ${withdrawStep === 'success'
+                                    ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/30'
+                                    : withdrawStep === 'error'
+                                        ? 'bg-red-500/10 text-red-400 border border-red-500/30'
+                                        : canWithdraw && !isWithdrawBusy
+                                            ? isBase 
+                                                ? 'bg-emerald-500 hover:bg-emerald-400 text-zinc-950 shadow-lg shadow-emerald-500/20 active:scale-[0.98]'
+                                                : 'bg-orange-600 hover:bg-orange-500 text-white shadow-lg shadow-orange-900/20 active:scale-[0.98]'
+                                            : 'bg-zinc-800 text-zinc-600 cursor-not-allowed border border-zinc-700/50'
+                                    }`}
+                            >
+                                <span className="flex items-center justify-center gap-2">
+                                    {isWithdrawBusy && (
+                                        <span className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
+                                    )}
+                                    {getWithdrawStepLabel()}
+                                </span>
+                            </button>
+                        )
                     )}
 
                     {/* Network Hint */}
-                    {!isBase && totalShares === 0 && vaultBalance === 0 && (
-                        <p className="mt-4 text-[10px] text-center text-zinc-600">
-                            Check <span className="text-zinc-400 font-medium">Base Safe Haven</span> if you expected bridged funds.
+                    {!isBase && totalShares === 0 && (
+                        <p className="mt-6 text-[10px] text-center text-zinc-600 font-medium">
+                            Switch to <span className="text-emerald-500/80 font-bold">Base Safe Haven</span> to view protected assets.
                         </p>
                     )}
 
