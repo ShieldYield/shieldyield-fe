@@ -3,14 +3,14 @@ import { createPublicClient, http, type Address, erc20Abi } from "viem";
 import { baseSepolia } from "viem/chains";
 import { fetchBridgeStatus } from "@/lib/bridge-status";
 
-// Base Sepolia deployed contract addresses (with depositFor support)
+// Base Sepolia deployed contract addresses (Updated from latest broadcast)
 const BASE_ADDRESSES = {
-    shieldVault: "0x2EDEe329359aC421059B09C4049A750CD71831E1" as Address,
-    shieldBridge: "0x87Ed95Ef9fB41BeA722f4575f54b4c24EB38F679" as Address,
-    aaveAdapter: "0xd1C409AeE097ba8d1590e40a6c8fF4908819BD35" as Address,
-    compoundAdapter: "0xeCD4101D1E7914F72c0fd9fbD00ad9FFb3093A8B" as Address,
-    morphoAdapter: "0xE7f4b7eE9308733C7c078697999ab50812ab5F73" as Address,
-    yieldMaxAdapter: "0x383A628338e299bB98d616aF3258788b1898EA80" as Address,
+    shieldVault: "0xf723cf2629a7461ad92c7ef6cad51cd853d332a7" as Address,
+    shieldBridge: "0x83995931a5be0cc67811ed1d4714f4eee213ee8d" as Address,
+    aaveAdapter: "0xb62ea26b218166bfd1808e76bef5222d7e4c5acd" as Address,
+    compoundAdapter: "0xaa862cdde53dcd2878dc49b1c0618ea23eecdf1b" as Address,
+    morphoAdapter: "0x184b015698fb9cd5f5c9cae1cdbce0d7e0e5ee46" as Address,
+    yieldMaxAdapter: "0x28b38104f3cd62eabe17e927d61dbc50b834b1b7" as Address,
 };
 
 const ADAPTER_ABI = [
@@ -49,28 +49,8 @@ const SHIELD_BRIDGE_ABI = [
         inputs: [],
         outputs: [{ name: "", type: "uint256" }],
     },
-    {
-        name: "EmergencyBridgeInitiated",
-        type: "event",
-        inputs: [
-            { name: "messageId", type: "bytes32", indexed: true },
-            { name: "destinationChain", type: "uint64", indexed: true },
-            { name: "token", type: "address", indexed: true },
-            { name: "amount", type: "uint256", indexed: false },
-            { name: "sender", type: "address", indexed: false },
-        ],
-    },
-    {
-        name: "EmergencyBridgeReceived",
-        type: "event",
-        inputs: [
-            { name: "messageId", type: "bytes32", indexed: true },
-            { name: "sourceChain", type: "uint64", indexed: true },
-            { name: "token", type: "address", indexed: true },
-            { name: "amount", type: "uint256", indexed: false },
-        ],
-    },
 ] as const;
+
 const SHIELD_VAULT_ABI = [
     {
         name: "getUserBalance",
@@ -140,29 +120,20 @@ export async function GET(request: NextRequest) {
         const escrowBalance = Number(escrowBalanceRaw) / 1e18;
         const adapters = [aave, compound, morpho, yieldMax];
 
-        // Fetch CCIP pending balance via shared module (no localhost fetch — avoids deadlock)
+        // Fetch CCIP pending balance via shared module
         let ccipPendingBalance = 0;
-        let pendingBridgeMessages: Array<{
-            messageId: string;
-            status: string;
-            amount: number;
-            destinationChain: string;
-            ccipExplorerUrl: string;
-        }> = [];
+        let pendingBridgeMessages: any[] = [];
         try {
-            const bridgeData = await fetchBridgeStatus();
+            const bridgeData = await fetchBridgeStatus({ wallet: wallet as string });
             ccipPendingBalance = bridgeData.totalPendingAmount;
             pendingBridgeMessages = bridgeData.pendingMessages;
         } catch (err) {
             console.warn("[base-safe-haven] bridge status fetch failed:", err);
         }
 
-        // Calculate global balance
-        const globalTotalBalance = adapters.reduce((s, a) => s + a.balance, 0) + escrowBalance + ccipPendingBalance;
-
         let personalBalance = 0;
         let personalClaims = 0;
-        const isZeroAddress = wallet === "0x0000000000000000000000000000000000000000";
+        const isZeroAddress = !wallet || wallet === "0x0000000000000000000000000000000000000000";
         if (wallet && !isZeroAddress) {
             try {
                 const [balanceRaw, claimsRaw] = await Promise.all([
@@ -186,8 +157,7 @@ export async function GET(request: NextRequest) {
             }
         }
 
-        const totalBalance = (wallet && !isZeroAddress) ? (personalBalance + personalClaims) : 0;
-        const primarySafeHaven = [aave, compound]; // Aave + Compound are the designated safe havens
+        const totalBalance = personalBalance + personalClaims;
 
         return NextResponse.json({
             chain: "Base Sepolia",
@@ -195,13 +165,12 @@ export async function GET(request: NextRequest) {
             shieldVault: BASE_ADDRESSES.shieldVault,
             shieldBridge: BASE_ADDRESSES.shieldBridge,
             emergencyBridgeCount: Number(bridgeCount),
-            escrowBalance, // Keep for debugging, but UI should ignore
+            escrowBalance,
             ccipPendingBalance,
             pendingBridgeMessages,
-            totalBalance, // This is now strictly specific per wallet
+            totalBalance, 
             unclaimedCrossChainFunds: personalClaims,
             adapters,
-            safeHavenAdapters: primarySafeHaven,
             hasFunds: totalBalance > 0,
             ccipExplorer: "https://ccip.chain.link",
         });

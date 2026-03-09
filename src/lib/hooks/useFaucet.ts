@@ -64,7 +64,7 @@ export function useFaucet() {
             setStep('waitingDeposit');
             
             // Wait for all transactions to complete
-            await Promise.all(txs.map(hash => publicClient.waitForTransactionReceipt({ hash })));
+            await Promise.all(txs.map(hash => publicClient.waitForTransactionReceipt({ hash: hash as `0x${string}` })));
             
             setStep('success');
             console.log("✅ All 10 USDC minted successfully!");

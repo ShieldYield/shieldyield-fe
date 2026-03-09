@@ -5,27 +5,15 @@ import { arbitrumSepolia } from "viem/chains";
 /**
  * GET /api/inject-state
  * ─────────────────────────────────────────────────────────────
- * Priority:
- * 1. Mock variance server (port 3099) — for demo inject via CLI
- *    (bun sim:inject-medium / bun sim:inject-critical)
- *    → immediate FE reaction, no chain write needed
- * 2. RiskRegistry on-chain — real scores from CRE daemon
+ * Updated with latest adapter addresses
  * ─────────────────────────────────────────────────────────────
  */
 
 export const dynamic = "force-dynamic";
 
-const MOCK_SERVER = "http://localhost:3099";
-
-// Maps injected scenario type → which adapter shows the threat on dashboard
-const SCENARIO_THREAT: Record<string, Record<string, string>> = {
-    warning: { MorphoAdapter: "WARNING" },    // sim-inject-medium: AI score 75 on Morpho
-    critical: { YieldMaxAdapter: "CRITICAL" }, // sim-inject-critical: TVL -25.5% on YieldMax
-};
-
 const RISK_REGISTRY = "0xD5Ebe945197198cAE3846444f2c158981C7450F2" as const;
 
-// Known adapters
+// Known adapters (Latest Arbitrum Sepolia)
 const ADAPTERS: Record<string, Address> = {
     AaveAdapter: "0xC085b5604561DeE55c15a002fFc8782450429635",
     CompoundAdapter: "0xD7069532cD6c4Bca265aA12db46c68c56e596649",
@@ -56,9 +44,7 @@ const RISK_REGISTRY_ABI = [
 
 const THREAT_LEVELS = ["SAFE", "WATCH", "WARNING", "CRITICAL"] as const;
 
-const rpcUrl =
-    process.env.ARBITRUM_SEPOLIA_RPC_URL ||
-    "https://sepolia-rollup.arbitrum.io/rpc";
+const rpcUrl = process.env.ARBITRUM_SEPOLIA_RPC_URL || "https://sepolia-rollup.arbitrum.io/rpc";
 
 const client = createPublicClient({
     chain: arbitrumSepolia,
@@ -66,7 +52,6 @@ const client = createPublicClient({
 });
 
 export async function GET() {
-    // ── Fall back to RiskRegistry on-chain (real CRE daemon scores) ──
     try {
         const calls = Object.values(ADAPTERS).map((addr) => ({
             address: RISK_REGISTRY as Address,

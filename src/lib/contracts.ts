@@ -5,7 +5,11 @@
 export const SHIELD_VAULT_ADDRESS = '0xE2b7f9E85ee0390B2c3bC874301CAeB941Fc88eB' as const;
 export const MOCK_USDC_ADDRESS = '0xA8C0c11bf64AF62CDCA6f93D3769B88BdD7cb93D' as const; // CCIP-BnM on Arb Sepolia
 
-export const BASE_SHIELD_VAULT_ADDRESS = '0x2EDEe329359aC421059B09C4049A750CD71831E1' as const;
+// ============================================================================
+// Contract Addresses (Base Sepolia)
+// ============================================================================
+
+export const BASE_SHIELD_VAULT_ADDRESS = '0xf723cf2629a7461ad92c7ef6cad51cd853d332a7' as const;
 export const BASE_USDC_ADDRESS = '0x88A2d74F47a237a62e7A51cdDa67270CE381555e' as const; // CCIP-BnM on Base Sepolia
 
 // ============================================================================

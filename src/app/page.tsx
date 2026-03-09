@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { useAccount } from 'wagmi';
-import { AdapterCard, RiskBadge, SentinelBanner, VaultActions, LiveYieldTicker, FundFlowDiagram } from '../components/Dashboard';
+import { AdapterCard, ProtocolTable, RiskBadge, SentinelBanner, VaultActions, LiveYieldTicker, FundFlowDiagram } from '../components/Dashboard';
 import type { SentinelData } from '../components/Dashboard';
 import { Header } from '../components/Header';
 import { Navbar } from '../components/Navbar';
@@ -306,10 +306,17 @@ export default function Home() {
                       <div className={`flex items-center gap-2 px-3 py-1.5 rounded-xl border transition-colors ${baseBalance > 0 ? "bg-emerald-500/10 border-emerald-500/30" : "bg-zinc-800/40 border-zinc-700/40"}`}>
                         <div className={`flex items-center justify-center w-6 h-6 rounded text-xs ${baseBalance > 0 ? "bg-emerald-500/20 shadow-sm shadow-emerald-500/20" : "bg-zinc-700/50"}`}>🛡️</div>
                         <div className="flex flex-col">
-                          <span className={`text-[10px] uppercase font-medium leading-none ${baseBalance > 0 ? "text-emerald-500/80" : "text-zinc-500"}`}>Base <span className="hidden sm:inline">Safe Haven</span></span>
-                          <span className={`text-sm font-mono font-medium leading-tight ${baseBalance > 0 ? "text-emerald-400" : "text-zinc-400"}`}>
-                            ${baseBalance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 4 })}
-                          </span>
+                          <span className={`text-[10px] uppercase font-medium leading-none ${baseBalance > 0 ? "text-emerald-500/80" : "text-zinc-500"}`}>Base Safe Haven</span>
+                          <div className="flex flex-col">
+                            <span className={`text-sm font-mono font-medium leading-tight ${rawBaseBalance > 0 ? "text-emerald-400" : "text-zinc-400"}`}>
+                              ${rawBaseBalance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 4 })}
+                            </span>
+                            {unclaimedBase > 0 && (
+                              <span className="text-[9px] font-bold text-cyan-400 mt-0.5 uppercase tracking-tighter">
+                                + ${unclaimedBase.toLocaleString()} PENDING CLAIM
+                              </span>
+                            )}
+                          </div>
                         </div>
                       </div>
 
@@ -481,24 +488,24 @@ export default function Home() {
                               href={msg.ccipExplorerUrl}
                               target="_blank"
                               rel="noopener noreferrer"
-                              className="block px-5 py-4 rounded-xl bg-emerald-500/10 border border-emerald-500/30 hover:bg-emerald-500/20 hover:border-emerald-500/50 transition-all group"
+                              className="block px-5 py-4 rounded-xl bg-cyan-500/10 border border-cyan-500/30 hover:bg-cyan-500/20 hover:border-cyan-500/50 transition-all group"
                             >
                               <div className="flex items-center justify-between mb-3">
                                 <div className="flex items-center gap-3">
-                                  <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse shadow-[0_0_8px_rgba(52,211,153,0.6)]" />
-                                  <span className="text-xs font-medium text-emerald-400 uppercase tracking-wider">
-                                    SUCCESS: SHIELDING
+                                  <span className="w-2.5 h-2.5 rounded-full bg-cyan-400 animate-pulse shadow-[0_0_8px_rgba(34,211,238,0.6)]" />
+                                  <span className="text-xs font-bold text-cyan-400 uppercase tracking-wider">
+                                    {msg.status === 'IN_PROGRESS' ? 'FINALIZING RESCUE...' : 'SHIELDING IN PROGRESS'}
                                   </span>
                                 </div>
-                                <span className="text-base font-mono font-medium text-emerald-400">
+                                <span className="text-base font-mono font-medium text-cyan-400">
                                   ${msg.amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 4 })}
                                 </span>
                               </div>
                               <div className="flex items-center justify-between">
-                                <span className="font-mono text-[11px] text-emerald-500/80 bg-emerald-500/10 px-2.5 py-1 rounded w-fit border border-emerald-500/20">
+                                <span className="font-mono text-[11px] text-cyan-500/80 bg-cyan-500/10 px-2.5 py-1 rounded w-fit border border-cyan-500/20">
                                   ID: {msg.messageId.slice(0, 10)}...{msg.messageId.slice(-6)}
                                 </span>
-                                <span className="text-[11px] text-emerald-400 font-medium flex items-center gap-1 group-hover:translate-x-1 transition-transform">
+                                <span className="text-[11px] text-cyan-400 font-medium flex items-center gap-1 group-hover:translate-x-1 transition-transform">
                                   Track Transfer →
                                 </span>
                               </div>
@@ -592,9 +599,11 @@ export default function Home() {
                               <span className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-tighter ${
                                 msg.status === 'SUCCESS' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 
                                 msg.status === 'FAILED' ? 'bg-red-500/10 text-red-400 border border-red-500/20' : 
-                                'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 animate-pulse'
+                                'bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 animate-pulse'
                               }`}>
-                                {msg.status === 'PENDING' || msg.status === 'IN_PROGRESS' ? 'SUCCESS: EVACUATING' : msg.status}
+                                {msg.status === 'PENDING' ? 'SHIELDING' : 
+                                 msg.status === 'IN_PROGRESS' ? 'IN TRANSIT' : 
+                                 msg.status}
                               </span>
                             </td>
                             <td className="px-5 py-4 whitespace-nowrap text-right">
@@ -616,24 +625,23 @@ export default function Home() {
               </div>
             )}
 
-            {/* Adapter Cards */}
+            {/* Protocol Table */}
             <div className="pt-2 space-y-4">
-              <h2 className="text-sm font-medium text-zinc-400 uppercase tracking-widest">Protocol Allocations</h2>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-                {Object.entries(adapters).map(([name, data]) => (
-                  <AdapterCard
-                    key={name}
-                    name={name}
-                    data={data as any}
-                    riskScore={riskScores[name]}
-                  />
-                ))}
-              </div>
-              {Object.keys(adapters).length === 0 && (
-                <div className="text-center py-16">
-                  <p className="text-base font-light text-zinc-500">No adapter data yet. Deposit into ShieldVault to see your portfolio.</p>
+              <div className="flex items-center justify-between">
+                <h2 className="text-sm font-medium text-zinc-400 uppercase tracking-widest">Protocol Allocations</h2>
+                <div className="flex items-center gap-2 px-3 py-1 bg-zinc-900/50 border border-zinc-800 rounded-full">
+                  <span className="relative flex h-2 w-2">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-cyan-400 opacity-75" />
+                    <span className="relative inline-flex rounded-full h-2 w-2 bg-cyan-400" />
+                  </span>
+                  <span className="text-[10px] text-zinc-400 font-bold uppercase tracking-wider">AI Guard Active</span>
                 </div>
-              )}
+              </div>
+              
+              <ProtocolTable 
+                adapters={adapters} 
+                riskScores={riskScores} 
+              />
             </div>
 
             {/* DeFi Metrics Summary */}
