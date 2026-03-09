@@ -111,7 +111,7 @@ export function EmergencyBridgeCard() {
                 <div className="space-y-4">
                     {/* Network Selection */}
                     <div className="space-y-2">
-                        <label className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">Target Network</label>
+                        <label className="text-xs font-semibold text-zinc-500 uppercase ">Target Network</label>
                         <select
                             value={targetChain.toString()}
                             onChange={(e) => setTargetChain(BigInt(e.target.value))}
@@ -127,7 +127,7 @@ export function EmergencyBridgeCard() {
 
                     {/* Amount Input */}
                     <div className="space-y-2">
-                        <label className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">USDC Amount</label>
+                        <label className="text-xs font-semibold text-zinc-500 uppercase ">USDC Amount</label>
                         <div className="relative">
                             <input
                                 type="number"
@@ -177,7 +177,7 @@ export function EmergencyBridgeCard() {
                         <button
                             onClick={handleExecute}
                             disabled={isPending || isWaiting || !amount}
-                            className="w-full mt-2 bg-red-600/10 hover:bg-red-600/20 border border-red-500/30 text-red-500 font-medium py-3 px-4 rounded-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed group-hover:border-red-500/50"
+                            className="w-full mt-2 bg-red-600/10 hover:bg-red-600/20 text-red-500 font-medium py-3 px-4 rounded-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed group-hover:border-red-500/50 border-none"
                         >
                             {isPending || isWaiting ? "Initiating Escape..." : "Trigger Escape"}
                         </button>
@@ -187,13 +187,13 @@ export function EmergencyBridgeCard() {
                             <div className="flex gap-2">
                                 <button
                                     onClick={cancelExecute}
-                                    className="flex-1 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 font-medium py-2 rounded-lg transition-colors text-sm"
+                                    className="flex-1 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 font-medium py-2 rounded-lg transition-colors text-sm border-none"
                                 >
                                     Cancel
                                 </button>
                                 <button
                                     onClick={confirmExecute}
-                                    className="flex-1 bg-red-600 hover:bg-red-500 text-white font-medium py-2 rounded-lg transition-colors text-sm shadow-[0_0_15px_rgba(220,38,38,0.5)]"
+                                    className="flex-1 bg-red-600 hover:bg-red-500 text-white font-medium py-2 rounded-lg transition-colors text-sm shadow-[0_0_15px_rgba(220,38,38,0.5)] border-none"
                                 >
                                     Confirm
                                 </button>

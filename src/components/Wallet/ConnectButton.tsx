@@ -21,7 +21,7 @@ export default function ConnectButton() {
                                 return (
                                     <button
                                         onClick={openConnectModal}
-                                        className="px-4 py-2 bg-cyan-600 hover:bg-cyan-500 text-white text-sm font-medium rounded-xl transition-colors duration-200"
+                                        className="px-4 py-2 bg-[#006aff] hover:bg-[#598eff] text-white text-sm font-medium rounded-xl transition-colors duration-200 border-none"
                                     >
                                         Connect Wallet
                                     </button>
@@ -32,7 +32,7 @@ export default function ConnectButton() {
                                 return (
                                     <button
                                         onClick={openChainModal}
-                                        className="px-4 py-2 bg-red-600 hover:bg-red-500 text-white text-sm font-medium rounded-xl transition-colors"
+                                        className="px-4 py-2 bg-red-600 hover:bg-red-500 text-white text-sm font-medium rounded-xl transition-colors border-none"
                                     >
                                         Wrong Network
                                     </button>
@@ -43,7 +43,7 @@ export default function ConnectButton() {
                                 <div className="flex items-center gap-2">
                                     <button
                                         onClick={openChainModal}
-                                        className="flex items-center gap-1.5 px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs rounded-lg transition-colors"
+                                        className="flex items-center gap-1.5 px-3 py-1.5 bg-[#006aff] hover:bg-[#598eff] text-white text-xs rounded-lg transition-colors border-none"
                                     >
                                         {chain.hasIcon && chain.iconUrl && (
                                             <img
@@ -56,7 +56,7 @@ export default function ConnectButton() {
                                     </button>
                                     <button
                                         onClick={openAccountModal}
-                                        className="flex items-center gap-1.5 px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-sm font-medium rounded-lg transition-colors"
+                                        className="flex items-center gap-1.5 px-3 py-1.5 bg-[#006aff] hover:bg-[#598eff] text-white text-sm font-medium rounded-lg transition-colors border-none"
                                     >
                                         <span className="w-2 h-2 bg-emerald-400 rounded-full animate-pulse" />
                                         {account.displayName}

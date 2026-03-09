@@ -40,8 +40,8 @@ export default function PortfolioChart({ data, onPeriodChange }: PortfolioChartP
             {/* Header */}
             <div className="flex items-center justify-between mb-4">
                 <div>
-                    <p className="text-xs text-zinc-500 uppercase tracking-wider mb-1">Portfolio Value</p>
-                    <p className="text-3xl font-bold text-zinc-50 tracking-tight">
+                    <p className="text-xs text-zinc-500 uppercase  mb-1">Portfolio Value</p>
+                    <p className="text-3xl font-bold text-zinc-50 ">
                         {formatValue(lastVal)}
                     </p>
                     <p className={`text-sm font-medium mt-0.5 ${isPositive ? 'text-emerald-400' : 'text-red-400'}`}>

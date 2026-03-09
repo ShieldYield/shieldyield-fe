@@ -2,6 +2,7 @@
 
 import { useMemo } from 'react';
 import RiskBadge from './RiskBadge';
+import { ProtocolIcon } from './ProtocolIcon';
 
 interface AdapterNode {
     name: string;
@@ -18,13 +19,6 @@ interface FundFlowDiagramProps {
     totalValue: number;
     adapters: AdapterNode[];
 }
-
-const protocolIcons: Record<string, string> = {
-    AaveAdapter: '🔵',
-    CompoundAdapter: '🟢',
-    MorphoAdapter: '🟣',
-    YieldMaxAdapter: '🟡',
-};
 
 const riskColors: Record<string, string> = {
     SAFE: '#34d399',
@@ -49,7 +43,7 @@ export default function FundFlowDiagram({ totalValue, adapters }: FundFlowDiagra
             />
 
             <div className="relative z-10">
-                <h3 className="text-sm font-medium text-zinc-400 uppercase tracking-widest mb-6">
+                <h3 className="text-sm font-medium text-zinc-400 uppercase  mb-6">
                     Fund Flow — Where Is Your Money?
                 </h3>
 
@@ -61,7 +55,7 @@ export default function FundFlowDiagram({ totalValue, adapters }: FundFlowDiagra
                             {/* Pulse ring */}
                             <div className="absolute inset-0 rounded-full border-2 border-cyan-500/20 animate-ping" style={{ animationDuration: '3s' }} />
                             <span className="text-2xl mb-1">🛡️</span>
-                            <span className="text-[10px] font-medium text-cyan-400 uppercase tracking-widest">ShieldVault</span>
+                            <span className="text-[10px] font-medium text-cyan-400 uppercase ">ShieldVault</span>
                             <span className="text-sm font-mono text-zinc-200 mt-0.5">
                                 ${totalValue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                             </span>
@@ -71,7 +65,6 @@ export default function FundFlowDiagram({ totalValue, adapters }: FundFlowDiagra
                     {/* Connection Lines + Adapter Nodes */}
                     <div className="flex-1 flex flex-col gap-3 w-full lg:pl-4">
                         {activeAdapters.map((adapter, i) => {
-                            const icon = protocolIcons[adapter.name] || '⚪';
                             const displayName = adapter.name.replace('Adapter', '');
                             const lineColor = riskColors[adapter.riskLevel || 'SAFE'] || riskColors.SAFE;
                             const lineWidth = Math.max(2, Math.min(6, adapter.allocation / 15));
@@ -109,7 +102,7 @@ export default function FundFlowDiagram({ totalValue, adapters }: FundFlowDiagra
                                     >
                                         <div className="flex items-center justify-between">
                                             <div className="flex items-center gap-2">
-                                                <span className="text-lg">{icon}</span>
+                                                <ProtocolIcon name={adapter.name} size={24} />
                                                 <div>
                                                     <div className="flex items-center gap-2">
                                                         <span className="text-sm font-medium text-zinc-200">{displayName}</span>

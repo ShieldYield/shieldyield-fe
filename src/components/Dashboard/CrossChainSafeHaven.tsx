@@ -4,8 +4,10 @@ import { useEffect, useState } from 'react';
 import { useAccount, useSwitchChain } from 'wagmi';
 import { useClaimCrossChainFunds } from '../../lib/hooks/useShieldVault';
 import { baseSepolia } from 'viem/chains';
+import { ProtocolIcon } from './ProtocolIcon';
 
 interface AdapterData {
+// ... rest of interfaces ...
     name: string;
     address: string;
     balance: number;
@@ -14,6 +16,7 @@ interface AdapterData {
 }
 
 interface PendingBridgeMessage {
+// ... rest of message ...
     messageId: string;
     status: string;
     amount: number;
@@ -24,6 +27,7 @@ interface PendingBridgeMessage {
 }
 
 interface SafeHavenData {
+// ... rest of haven data ...
     chain: string;
     chainId: number;
     shieldVault: string;
@@ -53,14 +57,8 @@ interface PortfolioData {
     chainBreakdown?: { arbitrum: number; base: number; pendingBridge?: number };
 }
 
-const PROTOCOL_ICONS: Record<string, string> = {
-    AaveAdapter: '🔵',
-    CompoundAdapter: '🟢',
-    MorphoAdapter: '🟣',
-    YieldMaxAdapter: '🟡',
-};
-
 const STATUS_CONFIG: Record<string, { label: string; color: string; bgColor: string; borderColor: string; pulse: boolean }> = {
+// ... rest of status ...
     PENDING: { label: 'In Transit (CCIP)', color: 'text-emerald-400', bgColor: 'bg-emerald-500/10', borderColor: 'border-emerald-500/30', pulse: true },
     IN_PROGRESS: { label: 'Finalizing...', color: 'text-emerald-400', bgColor: 'bg-emerald-500/10', borderColor: 'border-emerald-500/30', pulse: true },
     SUCCESS: { label: 'Arrived', color: 'text-emerald-400', bgColor: 'bg-emerald-500/10', borderColor: 'border-emerald-500/30', pulse: false },
@@ -147,7 +145,7 @@ export default function CrossChainSafeHaven() {
                     </div>
                     <div>
                         <h3 className="text-sm font-bold text-zinc-100">Cross-Chain Safe Haven</h3>
-                        <p className="text-[10px] text-zinc-500 uppercase tracking-widest mt-0.5 font-medium">
+                        <p className="text-[10px] text-zinc-500 uppercase  mt-0.5 font-medium">
                             Monitoring Base Sepolia
                         </p>
                     </div>
@@ -185,23 +183,23 @@ export default function CrossChainSafeHaven() {
                                 <div className="flex flex-col gap-1 relative z-10">
                                     <div className="flex items-center gap-2">
                                         <span className="text-xl">✨</span>
-                                        <span className="text-xs font-black text-cyan-300 uppercase tracking-tighter">Shield Success</span>
+                                        <span className="text-xs font-black text-cyan-300 uppercase ">Shield Success</span>
                                     </div>
-                                    <h4 className="text-lg font-bold text-white tracking-tight">Funds Successfully Rescued!</h4>
+                                    <h4 className="text-lg font-bold text-white ">Funds Successfully Rescued!</h4>
                                     <p className="text-xs text-cyan-100/70 max-w-[240px]">
                                         Your assets have been moved to Base Sepolia to avoid loss. Claim them now to start earning yield.
                                     </p>
                                 </div>
                                 
                                 <div className="flex items-center justify-between bg-black/40 px-4 py-3 rounded-xl border border-white/5 relative z-10">
-                                    <span className="text-[10px] font-medium text-zinc-400 uppercase tracking-widest">Amount to Claim</span>
+                                    <span className="text-[10px] font-medium text-zinc-400 uppercase ">Amount to Claim</span>
                                     <span className="text-xl font-mono font-bold text-cyan-400">${unclaimedBase.toLocaleString('en-US', { minimumFractionDigits: 2 })}</span>
                                 </div>
 
                                 {!isBaseChain ? (
                                     <button 
                                         onClick={() => switchChain?.({ chainId: baseSepolia.id })}
-                                        className="w-full py-3 bg-cyan-500 hover:bg-cyan-400 text-zinc-950 text-xs font-bold uppercase tracking-widest rounded-xl transition-all active:scale-[0.98] shadow-lg shadow-cyan-500/20 flex items-center justify-center gap-2"
+                                        className="w-full py-3 bg-cyan-500 hover:bg-cyan-400 text-zinc-950 text-xs font-bold uppercase  rounded-xl transition-all active:scale-[0.98] shadow-lg shadow-cyan-500/20 flex items-center justify-center gap-2"
                                     >
                                         <span>Switch to Base to Claim</span>
                                         <span>→</span>
@@ -210,7 +208,7 @@ export default function CrossChainSafeHaven() {
                                     <button 
                                         onClick={() => claimFunds?.()}
                                         disabled={isClaimPending}
-                                        className="w-full py-3 bg-emerald-500 hover:bg-emerald-400 text-zinc-950 text-xs font-bold uppercase tracking-widest rounded-xl transition-all shadow-lg shadow-emerald-500/20 active:scale-[0.98] disabled:opacity-50 flex items-center justify-center gap-2"
+                                        className="w-full py-3 bg-emerald-500 hover:bg-emerald-400 text-zinc-950 text-xs font-bold uppercase  rounded-xl transition-all shadow-lg shadow-emerald-500/20 active:scale-[0.98] disabled:opacity-50 flex items-center justify-center gap-2"
                                     >
                                         {isClaimPending ? (
                                             <>
@@ -230,7 +228,7 @@ export default function CrossChainSafeHaven() {
 
                         {/* Chain Proportion Bar */}
                         <div className="space-y-2">
-                            <div className="flex items-center justify-between text-[10px] font-bold tracking-tight">
+                            <div className="flex items-center justify-between text-[10px] font-bold ">
                                 <span className="flex items-center gap-1.5 text-blue-400">
                                     <span className="w-2 h-2 rounded-full bg-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.5)]" />
                                     Arbitrum {arbPercent.toFixed(0)}%
@@ -269,7 +267,7 @@ export default function CrossChainSafeHaven() {
                             <div className="flex flex-col items-center gap-2">
                                 <div className="w-16 h-16 rounded-2xl bg-zinc-800/80 border border-blue-500/30 flex flex-col items-center justify-center gap-1 shadow-lg">
                                     <span className="text-xl">⚡</span>
-                                    <span className="text-[9px] text-blue-400 font-bold uppercase tracking-wider">ARB</span>
+                                    <span className="text-[9px] text-blue-400 font-bold uppercase ">ARB</span>
                                 </div>
                                 <span className="text-[10px] text-zinc-400 font-mono font-medium">
                                     ${arbBalance.toLocaleString('en-US', { minimumFractionDigits: 2 })}
@@ -286,7 +284,7 @@ export default function CrossChainSafeHaven() {
                                         />
                                     )}
                                 </div>
-                                <span className={`text-[9px] font-black tracking-widest uppercase ${isCcipPending ? 'text-emerald-400 animate-pulse' : 'text-zinc-600'}`}>
+                                <span className={`text-[9px] font-black  uppercase ${isCcipPending ? 'text-emerald-400 animate-pulse' : 'text-zinc-600'}`}>
                                     {isCcipPending ? 'RESCUING' : 'CCIP'}
                                 </span>
                             </div>
@@ -297,7 +295,7 @@ export default function CrossChainSafeHaven() {
                                     : 'bg-zinc-800/80 border-zinc-700'
                                     }`}>
                                     <span className="text-xl">🛡️</span>
-                                    <span className={`text-[9px] font-bold uppercase tracking-wider ${baseBalance > 0.001 || unclaimedBase > 0.001 ? 'text-emerald-400' : 'text-zinc-500'}`}>
+                                    <span className={`text-[9px] font-bold uppercase  ${baseBalance > 0.001 || unclaimedBase > 0.001 ? 'text-emerald-400' : 'text-zinc-500'}`}>
                                         BASE
                                     </span>
                                 </div>
@@ -311,7 +309,7 @@ export default function CrossChainSafeHaven() {
                         <div className="pt-2">
                             {pendingMessages.length > 0 ? (
                                 <div className="space-y-2">
-                                    <p className="text-[10px] text-zinc-500 uppercase tracking-widest font-bold mb-3">Rescue Status</p>
+                                    <p className="text-[10px] text-zinc-500 uppercase  font-bold mb-3">Rescue Status</p>
                                     {pendingMessages.map((msg) => {
                                         const cfg = STATUS_CONFIG[msg.status] ?? STATUS_CONFIG.UNKNOWN;
                                         return (
@@ -330,7 +328,7 @@ export default function CrossChainSafeHaven() {
                                                     <span className="text-xs font-mono font-bold text-zinc-100">${msg.amount.toFixed(2)}</span>
                                                 </div>
                                                 <div className="flex items-center justify-between">
-                                                    <span className="text-[9px] text-zinc-500 font-mono tracking-tight">{truncateHash(msg.messageId)}</span>
+                                                    <span className="text-[9px] text-zinc-500 font-mono ">{truncateHash(msg.messageId)}</span>
                                                     <span className="text-[9px] text-cyan-500 font-bold uppercase group-hover:underline">View CCIP →</span>
                                                 </div>
                                             </a>

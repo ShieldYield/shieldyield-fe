@@ -45,13 +45,6 @@ interface ProtocolTableProps {
     riskScores: Record<string, { score: number; level: string }>;
 }
 
-const protocolIcons: Record<string, string> = {
-    AaveAdapter: '🔵',
-    CompoundAdapter: '🟢',
-    MorphoAdapter: '🟣',
-    YieldMaxAdapter: '🟡',
-};
-
 const recommendationColors = {
     HOLD: 'text-emerald-400 bg-emerald-400/10 border-emerald-400/30',
     REDUCE: 'text-amber-400 bg-amber-400/10 border-amber-400/30',
@@ -100,24 +93,24 @@ export default function ProtocolTable({ adapters, riskScores }: ProtocolTablePro
         <div className="w-full bg-zinc-900/40 border border-zinc-800/80 rounded-2xl overflow-hidden shadow-2xl">
             <div className="overflow-x-auto scrollbar-hide">
                 <Table className="w-full border-collapse">
-                    <TableHeader className="bg-zinc-900/60 sticky top-0 z-20">
+                    <TableHeader className="bg-zinc-900 sticky top-0 z-20">
                         <TableRow className="border-b border-zinc-800 hover:bg-transparent">
-                            <TableHead className="w-[200px] sticky left-0 bg-zinc-900/90 backdrop-blur-md z-30 px-6 py-4 text-[10px] font-bold text-zinc-500 uppercase tracking-wider">
+                            <TableHead className="w-[200px] sticky left-0 bg-zinc-900/90 backdrop-blur-md z-30 px-6 py-4 text-[12px] font-bold text-white uppercase ">
                                 Protocol
                             </TableHead>
-                            <TableHead className="px-6 py-4 text-[10px] font-bold text-zinc-500 uppercase tracking-wider">
+                            <TableHead className="px-6 py-4 text-[12px] font-bold text-white uppercase ">
                                 Status
                             </TableHead>
-                            <TableHead className="px-6 py-4 text-[10px] font-bold text-zinc-500 uppercase tracking-wider">
+                            <TableHead className="px-6 py-4 text-[12px] font-bold text-white uppercase ">
                                 Risk Level
                             </TableHead>
-                            <TableHead className="px-6 py-4 text-[10px] font-bold text-zinc-500 uppercase tracking-wider">
+                            <TableHead className="px-6 py-4 text-[12px] font-bold text-white uppercase ">
                                 APY
                             </TableHead>
-                            <TableHead className="px-6 py-4 text-[10px] font-bold text-zinc-500 uppercase tracking-wider">
+                            <TableHead className="px-6 py-4 text-[12px] font-bold text-white uppercase ">
                                 Allocation
                             </TableHead>
-                            <TableHead className="px-6 py-4 text-[10px] font-bold text-zinc-500 uppercase tracking-wider text-right">
+                            <TableHead className="px-6 py-4 text-[12px] font-bold text-white uppercase  text-right">
                                 Balance
                             </TableHead>
                             <TableHead className="w-[50px]"></TableHead>
@@ -128,7 +121,6 @@ export default function ProtocolTable({ adapters, riskScores }: ProtocolTablePro
                             const risk = riskScores[name];
                             const isExpanded = expandedRows[name];
                             const displayName = name.replace('Adapter', '');
-                            const icon = protocolIcons[name] || '⚪';
 
                             return (
                                 <React.Fragment key={name}>
@@ -142,9 +134,9 @@ export default function ProtocolTable({ adapters, riskScores }: ProtocolTablePro
                                         {/* Sticky First Column */}
                                         <TableCell className="sticky left-0 bg-zinc-950/80 backdrop-blur-md z-10 px-6 py-4 border-r border-zinc-800/30">
                                             <div className="flex items-center gap-3">
-                                                <ProtocolIcon name={name} className="group-hover:border-zinc-500 transition-colors" />
+                                                <ProtocolIcon name={name} size={24} className="group-hover:border-zinc-500 transition-colors" />
                                                 <div className="flex flex-col">
-                                                    <span className="text-sm font-medium text-zinc-100">{displayName}</span>
+                                                    <span className="text-sm font-medium text-[#598eff]">{displayName}</span>
                                                     {data.address && (
                                                         <span className="text-[9px] font-mono text-zinc-500">
                                                             {data.address.slice(0, 6)}...{data.address.slice(-4)}
@@ -162,7 +154,7 @@ export default function ProtocolTable({ adapters, riskScores }: ProtocolTablePro
                                                     data.isHealthy ? "bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.4)]" : "bg-red-400 shadow-[0_0_8px_rgba(248,113,113,0.4)]"
                                                 )} />
                                                 <span className={cn(
-                                                    "text-xs font-medium uppercase tracking-tighter",
+                                                    "text-xs font-medium uppercase ",
                                                     data.isHealthy ? "text-emerald-400" : "text-red-400"
                                                 )}>
                                                     {data.isHealthy ? 'Healthy' : 'Unhealthy'}
@@ -241,7 +233,7 @@ export default function ProtocolTable({ adapters, riskScores }: ProtocolTablePro
                                                     {aiLoading[name] ? (
                                                         <div className="flex flex-col items-center justify-center py-12 gap-4">
                                                             <div className="w-6 h-6 border-2 border-cyan-500 border-t-transparent rounded-full animate-spin" />
-                                                            <span className="text-xs text-zinc-500 tracking-widest uppercase">AI Sentinel Analyzing {displayName}...</span>
+                                                            <span className="text-xs text-zinc-500  uppercase">AI Sentinel Analyzing {displayName}...</span>
                                                         </div>
                                                     ) : aiData[name] ? (
                                                         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -251,12 +243,12 @@ export default function ProtocolTable({ adapters, riskScores }: ProtocolTablePro
                                                                     <div className="p-1.5 bg-cyan-500/10 rounded-lg">
                                                                         <Activity className="w-4 h-4 text-cyan-400" />
                                                                     </div>
-                                                                    <h4 className="text-xs font-bold text-zinc-400 uppercase tracking-widest">AI Sentinel Intelligence</h4>
+                                                                    <h4 className="text-xs font-bold text-zinc-400 uppercase ">AI Sentinel Intelligence</h4>
                                                                 </div>
                                                                 
                                                                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                                                                     <div className="p-4 bg-zinc-800/30 border border-zinc-700/30 rounded-2xl">
-                                                                        <span className="text-[10px] text-zinc-500 uppercase tracking-widest mb-1 block">Threat Score</span>
+                                                                        <span className="text-[10px] text-zinc-500 uppercase  mb-1 block">Threat Score</span>
                                                                         <div className="flex items-baseline gap-1">
                                                                             <span className={cn(
                                                                                 "text-2xl font-light",
@@ -267,13 +259,13 @@ export default function ProtocolTable({ adapters, riskScores }: ProtocolTablePro
                                                                         </div>
                                                                     </div>
                                                                     <div className="p-4 bg-zinc-800/30 border border-zinc-700/30 rounded-2xl">
-                                                                        <span className="text-[10px] text-zinc-500 uppercase tracking-widest mb-1 block">Confidence</span>
+                                                                        <span className="text-[10px] text-zinc-500 uppercase  mb-1 block">Confidence</span>
                                                                         <div className="flex items-baseline gap-1">
                                                                             <span className="text-2xl font-light text-zinc-100">{Math.round(aiData[name]!.confidence * 100)}%</span>
                                                                         </div>
                                                                     </div>
                                                                     <div className="p-4 bg-zinc-800/30 border border-zinc-700/30 rounded-2xl">
-                                                                        <span className="text-[10px] text-zinc-500 uppercase tracking-widest mb-1 block">Recommendation</span>
+                                                                        <span className="text-[10px] text-zinc-500 uppercase  mb-1 block">Recommendation</span>
                                                                         <Badge className={cn("mt-1", recommendationColors[aiData[name]!.recommendation])}>
                                                                             {aiData[name]!.recommendation}
                                                                         </Badge>
@@ -283,7 +275,7 @@ export default function ProtocolTable({ adapters, riskScores }: ProtocolTablePro
                                                                 <div className="p-5 bg-zinc-800/20 border border-zinc-700/20 rounded-2xl">
                                                                     <div className="flex items-center gap-2 mb-3">
                                                                         <Info className="w-3.5 h-3.5 text-zinc-500" />
-                                                                        <span className="text-[10px] text-zinc-500 uppercase tracking-widest">Sentinel Reasoning</span>
+                                                                        <span className="text-[10px] text-zinc-500 uppercase ">Sentinel Reasoning</span>
                                                                     </div>
                                                                     <p className="text-sm font-light text-zinc-300 leading-relaxed italic">
                                                                         "{aiData[name]!.reasoning}"
@@ -293,7 +285,7 @@ export default function ProtocolTable({ adapters, riskScores }: ProtocolTablePro
                                                                 {/* News Headlines */}
                                                                 {aiData[name]!.newsHeadlines && aiData[name]!.newsHeadlines!.length > 0 && (
                                                                     <div className="space-y-3">
-                                                                        <span className="text-[10px] text-zinc-500 uppercase tracking-widest block">Market Intelligence (Off-Chain)</span>
+                                                                        <span className="text-[10px] text-zinc-500 uppercase  block">Market Intelligence (Off-Chain)</span>
                                                                         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                                                                             {aiData[name]!.newsHeadlines!.slice(0, 4).map((h, i) => (
                                                                                 <div key={i} className="p-3 bg-zinc-800/40 border border-zinc-700/20 rounded-xl text-[11px] text-zinc-400 line-clamp-2 hover:text-zinc-200 transition-colors">
@@ -311,7 +303,7 @@ export default function ProtocolTable({ adapters, riskScores }: ProtocolTablePro
                                                                     <div className="p-1.5 bg-zinc-800 rounded-lg">
                                                                         <ShieldCheck className="w-4 h-4 text-zinc-400" />
                                                                     </div>
-                                                                    <h4 className="text-xs font-bold text-zinc-400 uppercase tracking-widest">Security Health</h4>
+                                                                    <h4 className="text-xs font-bold text-zinc-400 uppercase ">Security Health</h4>
                                                                 </div>
 
                                                                 {/* GitHub Stats */}
@@ -319,7 +311,7 @@ export default function ProtocolTable({ adapters, riskScores }: ProtocolTablePro
                                                                     <div className="flex items-center justify-between">
                                                                         <div className="flex items-center gap-2">
                                                                             <Github className="w-3.5 h-3.5 text-zinc-500" />
-                                                                            <span className="text-[10px] text-zinc-500 uppercase tracking-widest">GitHub Repository</span>
+                                                                            <span className="text-[10px] text-zinc-500 uppercase ">GitHub Repository</span>
                                                                         </div>
                                                                         {aiData[name]!.sources?.githubUrl && (
                                                                             <a href={aiData[name]!.sources?.githubUrl} target="_blank" rel="noopener noreferrer" className="text-cyan-500 hover:text-cyan-400 transition-colors">
@@ -343,7 +335,7 @@ export default function ProtocolTable({ adapters, riskScores }: ProtocolTablePro
                                                                 <div className="space-y-4">
                                                                     <div className="flex items-center gap-2">
                                                                         <AlertTriangle className="w-3.5 h-3.5 text-zinc-500" />
-                                                                        <span className="text-[10px] text-zinc-500 uppercase tracking-widest">Key Risk Signals</span>
+                                                                        <span className="text-[10px] text-zinc-500 uppercase ">Key Risk Signals</span>
                                                                     </div>
                                                                     <div className="space-y-2">
                                                                         {aiData[name]!.signals.map((s, i) => (
@@ -378,7 +370,7 @@ export default function ProtocolTable({ adapters, riskScores }: ProtocolTablePro
             {/* Horizontal Scroll Hint for Mobile */}
             <div className="md:hidden flex items-center justify-center gap-2 py-3 bg-zinc-900/80 border-t border-zinc-800">
                 <Info className="w-3 h-3 text-zinc-600" />
-                <span className="text-[10px] text-zinc-600 uppercase tracking-widest">Scroll right to view more data</span>
+                <span className="text-[10px] text-zinc-600 uppercase ">Scroll right to view more data</span>
             </div>
         </div>
     );

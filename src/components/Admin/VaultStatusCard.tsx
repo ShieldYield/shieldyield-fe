@@ -93,10 +93,7 @@ export function VaultStatusCard() {
                 <button
                     onClick={handleTogglePause}
                     disabled={isLoading || isPending || isPaused === undefined}
-                    className={`w-full relative overflow-hidden rounded-xl font-medium py-3 px-4 disabled:opacity-50 disabled:cursor-not-allowed transition-all ${isPaused
-                            ? "bg-green-500/20 text-green-400 hover:bg-green-500/30 border border-green-500/30"
-                            : "bg-red-500/20 text-red-400 hover:bg-red-500/30 border border-red-500/30"
-                        }`}
+                    className={`w-full relative overflow-hidden rounded-xl font-medium py-3 px-4 disabled:opacity-50 disabled:cursor-not-allowed transition-all ${isPaused ? "bg-green-500/20 text-green-400 hover:bg-green-500/30" : "bg-red-500/20 text-red-400 hover:bg-red-500/30"} border-none`}
                 >
                     {isPending
                         ? "Confirming status change..."

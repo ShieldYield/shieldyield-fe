@@ -11,31 +11,37 @@ interface ProtocolIconProps {
 }
 
 const iconMap: Record<string, string> = {
-  Aave: '🔵',
-  Compound: '🟢',
-  Morpho: '🟣',
-  YieldMax: '🟡',
+  Aave: '/logos/aave.svg',
+  Compound: '/logos/compound.svg',
+  Morpho: '/logos/morpho.svg',
+  YieldMax: '🟡', // Keep emoji for YieldMax as no SVG was provided
 };
 
-// This component can be easily updated by the user to use real images
-// just by adding image paths to the iconMap or replacing the logic here.
 export function ProtocolIcon({ name, className, size = 32 }: ProtocolIconProps) {
   const displayName = name.replace('Adapter', '');
-  const icon = iconMap[displayName];
-
-  // If the user wants to use images, they can do:
-  // const imagePath = `/logos/${displayName.toLowerCase()}.png`;
-  // return <Image src={imagePath} alt={name} width={size} height={size} className={className} />;
+  const iconPath = iconMap[displayName];
+  const isImage = iconPath && iconPath.startsWith('/');
 
   return (
     <div 
       className={cn(
-        "flex items-center justify-center rounded-lg bg-zinc-800/50 border border-zinc-700/50 overflow-hidden font-bold text-zinc-400",
+        "flex items-center justify-center rounded-lg bg-zinc-800/50 border border-zinc-700/50 overflow-hidden font-bold text-zinc-400 shrink-0",
         className
       )}
       style={{ width: size, height: size }}
     >
-      {icon || displayName.charAt(0)}
+      {isImage ? (
+        <div className="relative w-full h-full p-1.5">
+          <Image 
+            src={iconPath} 
+            alt={displayName} 
+            fill 
+            className="object-contain"
+          />
+        </div>
+      ) : (
+        <span>{iconPath || displayName.charAt(0)}</span>
+      )}
     </div>
   );
 }

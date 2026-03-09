@@ -12,7 +12,7 @@ export default function AiTransparencyPanel({ data }: { data: SentinelData }) {
 
                 {/* Score & Confidence */}
                 <div className="flex flex-col gap-2">
-                    <span className="text-[10px] font-medium text-zinc-500 uppercase tracking-widest">Score & Confidence</span>
+                    <span className="text-[10px] font-medium text-zinc-500 uppercase ">Score & Confidence</span>
                     <div className="flex items-end gap-2">
                         <span className="text-3xl font-light text-zinc-100">{data.ai_threat_score}</span>
                         <span className="text-sm font-light text-zinc-500 mb-0.5">/ 100</span>
@@ -22,7 +22,7 @@ export default function AiTransparencyPanel({ data }: { data: SentinelData }) {
 
                 {/* Analysis Summary */}
                 <div className="md:col-span-2 flex flex-col gap-2">
-                    <span className="text-[10px] font-medium text-zinc-500 uppercase tracking-widest">Analysis</span>
+                    <span className="text-[10px] font-medium text-zinc-500 uppercase ">Analysis</span>
                     <p className="text-sm font-light text-zinc-300 leading-relaxed">
                         {data.reasoning}
                     </p>
@@ -31,7 +31,7 @@ export default function AiTransparencyPanel({ data }: { data: SentinelData }) {
 
             {/* ─── Row 2: Data Sources ─── */}
             <div className="space-y-4">
-                <span className="text-[10px] font-medium text-zinc-500 uppercase tracking-widest">Data Sources</span>
+                <span className="text-[10px] font-medium text-zinc-500 uppercase ">Data Sources</span>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     {/* GitHub Stats */}
@@ -88,7 +88,7 @@ export default function AiTransparencyPanel({ data }: { data: SentinelData }) {
             {/* ─── Row 3: Signals ─── */}
             {data.signals && data.signals.length > 0 && (
                 <div className="space-y-4">
-                    <span className="text-[10px] font-medium text-zinc-500 uppercase tracking-widest">Key Signals</span>
+                    <span className="text-[10px] font-medium text-zinc-500 uppercase ">Key Signals</span>
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                         {data.signals.map((s, i) => (
                             <div key={i} className="flex items-start gap-2.5 p-3 rounded-2xl bg-zinc-900/40 border border-zinc-800/50">

@@ -112,7 +112,7 @@ export function SetSafeHavenCard() {
                 <button
                     onClick={handleSetSafeHaven}
                     disabled={!isAddress(adapterAddress) || isPending}
-                    className="w-full relative group overflow-hidden rounded-xl bg-blue-500 text-white font-medium py-3 px-4 disabled:opacity-50 disabled:cursor-not-allowed transition-all hover:bg-blue-600"
+                    className="w-full relative group overflow-hidden rounded-xl bg-blue-500 text-white font-medium py-3 px-4 disabled:opacity-50 disabled:cursor-not-allowed transition-all hover:bg-blue-600 border-none"
                 >
                     <div className="relative z-10 flex items-center justify-center gap-2">
                         {isPending ? "Confirming in Wallet..." : "Set Safe Haven"}

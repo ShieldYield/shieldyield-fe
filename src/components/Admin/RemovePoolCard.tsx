@@ -127,7 +127,7 @@ export function RemovePoolCard() {
                 <button
                     onClick={handleRemovePool}
                     disabled={!isAddress(selectedAdapter) || isPending}
-                    className="w-full relative group overflow-hidden rounded-xl bg-red-600/80 text-white font-medium py-3 px-4 disabled:opacity-50 disabled:cursor-not-allowed transition-all hover:bg-red-600"
+                    className="w-full relative group overflow-hidden rounded-xl bg-red-600/80 text-white font-medium py-3 px-4 disabled:opacity-50 disabled:cursor-not-allowed transition-all hover:bg-red-600 border-none"
                 >
                     {isPending ? "Confirming in Wallet..." : "Permanently Remove Pool"}
                 </button>

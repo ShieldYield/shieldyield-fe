@@ -2,8 +2,10 @@
 
 import { useState, useEffect } from 'react';
 import RiskBadge from './RiskBadge';
+import { ProtocolIcon } from './ProtocolIcon';
 
 interface AiSentinelData {
+// ... rest of interfaces ...
     ai_threat_score: number;
     confidence: number;
     reasoning: string;
@@ -33,14 +35,8 @@ interface AdapterCardProps {
     riskScore?: { score: number; level: string };
 }
 
-const protocolIcons: Record<string, string> = {
-    AaveAdapter: '🔵',
-    CompoundAdapter: '🟢',
-    MorphoAdapter: '🟣',
-    YieldMaxAdapter: '🟡',
-};
-
 const recommendationColors = {
+// ... rest of colors ...
     HOLD: 'text-emerald-400 bg-emerald-400/10 border-emerald-400/30',
     REDUCE: 'text-amber-400 bg-amber-400/10 border-amber-400/30',
     EXIT: 'text-red-400 bg-red-400/10 border-red-400/30',
@@ -68,7 +64,6 @@ export default function AdapterCard({ name, data, riskScore }: AdapterCardProps)
         }
     }, [riskScore?.score]); // eslint-disable-line react-hooks/exhaustive-deps
 
-    const icon = protocolIcons[name] || '⚪';
     const displayName = name.replace('Adapter', '');
 
     const yieldPerSecond = data.balance > 0 && data.apy > 0
@@ -99,8 +94,8 @@ export default function AdapterCard({ name, data, riskScore }: AdapterCardProps)
                 {/* ── Header: Icon + Name + Risk Badge ── */}
                 <div className="flex items-center justify-between mb-5">
                     <div className="flex items-center gap-2.5">
-                        <span className="text-xl">{icon}</span>
-                        <h3 className="text-base font-medium text-zinc-100">{displayName}</h3>
+                        <ProtocolIcon name={name} size={24} />
+                        <h3 className="text-base font-medium text-[#598eff]">{displayName}</h3>
                     </div>
                     {riskScore && (
                         <RiskBadge level={riskScore.level} score={riskScore.score} size="sm" />
@@ -110,7 +105,7 @@ export default function AdapterCard({ name, data, riskScore }: AdapterCardProps)
                 {/* ── Balance + Change Indicator ── */}
                 <div className="mb-5">
                     <div className="flex items-baseline gap-2">
-                        <p className="text-3xl font-light text-zinc-50 tracking-tight font-mono tabular-nums">
+                        <p className="text-3xl font-light text-zinc-50  font-mono tabular-nums">
                             ${data.balance.toLocaleString('en-US', { minimumFractionDigits: 6, maximumFractionDigits: 6 })}
                         </p>
                         {data.changeDirection && data.changeDirection !== 'neutral' && (
@@ -135,11 +130,11 @@ export default function AdapterCard({ name, data, riskScore }: AdapterCardProps)
                 {/* ── Stats Grid ── */}
                 <div className="grid grid-cols-3 gap-3 pt-4 border-t border-zinc-800">
                     <div className="flex flex-col gap-1">
-                        <p className="text-[10px] uppercase tracking-widest font-medium text-zinc-500">APY</p>
+                        <p className="text-[10px] uppercase  font-medium text-zinc-500">APY</p>
                         <p className="text-sm font-light text-emerald-400">{data.apy.toFixed(2)}%</p>
                     </div>
                     <div className="flex flex-col gap-1">
-                        <p className="text-[10px] uppercase tracking-widest font-medium text-zinc-500">Alloc</p>
+                        <p className="text-[10px] uppercase  font-medium text-zinc-500">Alloc</p>
                         <div className="flex items-center gap-1.5">
                             <p className="text-sm font-light text-zinc-300">{data.allocation.toFixed(1)}%</p>
                             {data.targetAllocation !== undefined && Math.abs(data.allocation - data.targetAllocation) > 1 && (
@@ -150,7 +145,7 @@ export default function AdapterCard({ name, data, riskScore }: AdapterCardProps)
                         </div>
                     </div>
                     <div className="flex flex-col gap-1">
-                        <p className="text-[10px] uppercase tracking-widest font-medium text-zinc-500">Yield</p>
+                        <p className="text-[10px] uppercase  font-medium text-zinc-500">Yield</p>
                         <p className="text-sm font-light text-cyan-400">
                             +${data.accruedYield.toLocaleString('en-US', { minimumFractionDigits: 2 })}
                         </p>
@@ -184,7 +179,7 @@ export default function AdapterCard({ name, data, riskScore }: AdapterCardProps)
                 {riskScore && (
                     <div className="mt-4 pt-4 border-t border-zinc-800/60">
                         <div className="flex items-center justify-between mb-1.5">
-                            <span className="text-[10px] uppercase tracking-widest text-zinc-500">Risk Score</span>
+                            <span className="text-[10px] uppercase  text-zinc-500">Risk Score</span>
                             <span className="text-[10px] font-mono text-zinc-400">{riskScore.score}/100</span>
                         </div>
                         <div className="h-1 bg-zinc-800 rounded-full overflow-hidden">
@@ -237,21 +232,21 @@ export default function AdapterCard({ name, data, riskScore }: AdapterCardProps)
                             {/* Score + Confidence + Recommendation */}
                             <div className="grid grid-cols-3 gap-3">
                                 <div className="flex flex-col gap-1 p-3 bg-zinc-900/60 rounded-xl border border-zinc-800/50">
-                                    <span className="text-[10px] uppercase tracking-widest text-zinc-500">Threat</span>
+                                    <span className="text-[10px] uppercase  text-zinc-500">Threat</span>
                                     <span className="text-xl font-light text-zinc-100">
                                         {aiData.ai_threat_score}
                                         <span className="text-xs text-zinc-600">/100</span>
                                     </span>
                                 </div>
                                 <div className="flex flex-col gap-1 p-3 bg-zinc-900/60 rounded-xl border border-zinc-800/50">
-                                    <span className="text-[10px] uppercase tracking-widest text-zinc-500">Confidence</span>
+                                    <span className="text-[10px] uppercase  text-zinc-500">Confidence</span>
                                     <span className="text-xl font-light text-zinc-100">
                                         {Math.round(aiData.confidence * 100)}
                                         <span className="text-xs text-zinc-600">%</span>
                                     </span>
                                 </div>
                                 <div className="flex flex-col gap-1 p-3 bg-zinc-900/60 rounded-xl border border-zinc-800/50">
-                                    <span className="text-[10px] uppercase tracking-widest text-zinc-500">Action</span>
+                                    <span className="text-[10px] uppercase  text-zinc-500">Action</span>
                                     <span className={`text-sm font-medium ${aiData.recommendation === 'HOLD' ? 'text-emerald-400' :
                                             aiData.recommendation === 'REDUCE' ? 'text-amber-400' : 'text-red-400'
                                         }`}>{aiData.recommendation}</span>
@@ -260,14 +255,14 @@ export default function AdapterCard({ name, data, riskScore }: AdapterCardProps)
 
                             {/* AI Reasoning */}
                             <div className="p-3 bg-zinc-900/40 rounded-xl border border-zinc-800/50">
-                                <span className="text-[10px] uppercase tracking-widest text-zinc-500 block mb-1.5">AI Reasoning</span>
+                                <span className="text-[10px] uppercase  text-zinc-500 block mb-1.5">AI Reasoning</span>
                                 <p className="text-xs font-light text-zinc-300 leading-relaxed">{aiData.reasoning}</p>
                             </div>
 
                             {/* GitHub + News */}
                             <div className="grid grid-cols-2 gap-3">
                                 <div className="p-3 bg-zinc-900/40 rounded-xl border border-zinc-800/50">
-                                    <span className="text-[10px] uppercase tracking-widest text-zinc-500 block mb-2">GitHub</span>
+                                    <span className="text-[10px] uppercase  text-zinc-500 block mb-2">GitHub</span>
                                     <div className="space-y-1">
                                         <div className="flex justify-between">
                                             <span className="text-[10px] text-zinc-500">Last push</span>
@@ -291,7 +286,7 @@ export default function AdapterCard({ name, data, riskScore }: AdapterCardProps)
                                 </div>
 
                                 <div className="p-3 bg-zinc-900/40 rounded-xl border border-zinc-800/50">
-                                    <span className="text-[10px] uppercase tracking-widest text-zinc-500 block mb-2">News</span>
+                                    <span className="text-[10px] uppercase  text-zinc-500 block mb-2">News</span>
                                     {aiData.newsHeadlines && aiData.newsHeadlines.length > 0 ? (
                                         <ul className="space-y-1.5">
                                             {aiData.newsHeadlines.slice(0, 3).map((h, i) => (
@@ -315,13 +310,13 @@ export default function AdapterCard({ name, data, riskScore }: AdapterCardProps)
                             {/* Key Signals */}
                             {aiData.signals && aiData.signals.length > 0 && (
                                 <div>
-                                    <span className="text-[10px] uppercase tracking-widest text-zinc-500 block mb-2">Key Signals</span>
+                                    <span className="text-[10px] uppercase  text-zinc-500 block mb-2">Key Signals</span>
                                     <div className="space-y-1.5">
                                         {aiData.signals.map((s, i) => (
                                             <div key={i} className="flex items-start gap-2 p-2 rounded-lg bg-zinc-900/40 border border-zinc-800/40">
                                                 <span className={`mt-1 w-1.5 h-1.5 rounded-full shrink-0 ${sentimentDot(s.sentiment)}`} />
                                                 <div>
-                                                    <span className="text-[9px] uppercase tracking-wider text-zinc-600 mr-1">{s.source}</span>
+                                                    <span className="text-[9px] uppercase  text-zinc-600 mr-1">{s.source}</span>
                                                     <span className="text-[10px] font-light text-zinc-300 leading-snug">{s.signal}</span>
                                                 </div>
                                             </div>

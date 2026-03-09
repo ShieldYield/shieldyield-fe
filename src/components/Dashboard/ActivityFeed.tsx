@@ -28,7 +28,7 @@ export default function ActivityFeed({ logs }: ActivityFeedProps) {
     if (!logs.length) {
         return (
             <div className="bg-zinc-900/60 border border-zinc-800 rounded-2xl p-5">
-                <h3 className="text-sm font-semibold text-zinc-400 uppercase tracking-wider mb-3">Recent Activity</h3>
+                <h3 className="text-sm font-semibold text-zinc-400 uppercase  mb-3">Recent Activity</h3>
                 <p className="text-xs text-zinc-600 text-center py-6">No activity yet</p>
             </div>
         );
@@ -36,7 +36,7 @@ export default function ActivityFeed({ logs }: ActivityFeedProps) {
 
     return (
         <div className="bg-zinc-900/60 border border-zinc-800 rounded-2xl p-5">
-            <h3 className="text-sm font-semibold text-zinc-400 uppercase tracking-wider mb-3">Recent Activity</h3>
+            <h3 className="text-sm font-semibold text-zinc-400 uppercase  mb-3">Recent Activity</h3>
             <div className="space-y-2 max-h-[300px] overflow-y-auto pr-1">
                 {logs.map((log) => (
                     <div
@@ -46,7 +46,7 @@ export default function ActivityFeed({ logs }: ActivityFeedProps) {
                         <span className="text-base mt-0.5">{eventIcons[log.event_type] || '📋'}</span>
                         <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-2 mb-0.5">
-                                <span className="text-[10px] uppercase tracking-wider text-zinc-500 font-medium">
+                                <span className="text-[10px] uppercase  text-zinc-500 font-medium">
                                     {log.event_type.replace('_', ' ')}
                                 </span>
                                 {log.severity && <RiskBadge level={log.severity} size="sm" />}

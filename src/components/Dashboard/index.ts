@@ -10,4 +10,5 @@ export { default as VaultActions } from './VaultActions';
 export { default as LiveYieldTicker } from './LiveYieldTicker';
 export { default as FundFlowDiagram } from './FundFlowDiagram';
 export { default as CrossChainSafeHaven } from './CrossChainSafeHaven';
+export { ProtocolIcon } from './ProtocolIcon';
 export type { SentinelData } from './SentinelBanner';

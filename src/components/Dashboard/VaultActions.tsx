@@ -56,9 +56,31 @@ export default function VaultActions({ onSuccess }: { onSuccess?: () => void }) 
         }
     }, [depositStep, withdrawStep, claimStep, faucetStep, refetch, onSuccess, resetFaucet]);
 
+    // Auto-switch tab if on Base and deposit was active
+    useEffect(() => {
+        if (isBase && activeTab === 'deposit') {
+            setActiveTab('withdraw');
+        }
+    }, [isBase, activeTab]);
+
     if (!isConnected) return null;
 
     const numericAmount = parseFloat(amount) || 0;
+
+    const isDepositBusy = isDepositPending || isDepositConfirming;
+    const isWithdrawBusy = isWithdrawPending || isWithdrawConfirming;
+    const isClaimBusy = isClaimPending || isClaimConfirming;
+
+    const canDeposit =
+        !isBase &&
+        numericAmount >= MIN_DEPOSIT_USDC &&
+        numericAmount <= usdcBalance &&
+        !isDepositBusy;
+
+    const canWithdraw =
+        numericAmount > 0 &&
+        numericAmount <= totalShares &&
+        !isWithdrawBusy;
 
     // -- Action Handlers --
     const handleDeposit = () => {
@@ -79,13 +101,6 @@ export default function VaultActions({ onSuccess }: { onSuccess?: () => void }) 
             setAmount(totalShares.toString());
         }
     };
-
-    // Auto-switch tab if on Base and deposit was active
-    useEffect(() => {
-        if (isBase && activeTab === 'deposit') {
-            setActiveTab('withdraw');
-        }
-    }, [isBase, activeTab]);
 
     const getDepositStepLabel = () => {
         switch (depositStep) {
@@ -119,10 +134,10 @@ export default function VaultActions({ onSuccess }: { onSuccess?: () => void }) 
             {/* Header with Active Pools Badge & Network Switcher */}
             <div className="flex items-center justify-between mb-6">
                 <div className="flex flex-col gap-1">
-                    <h3 className="text-xs font-bold text-zinc-400 uppercase tracking-[0.2em]">Vault Actions</h3>
+                    <h3 className="text-[12px] font-bold text-white uppercase tracking-[0.2em]">Vault Actions</h3>
                     <div className="flex items-center gap-2">
                         <span className={`w-1.5 h-1.5 rounded-full ${isBase ? 'bg-emerald-400 animate-pulse' : 'bg-blue-400'}`} />
-                        <span className={`text-[10px] font-bold uppercase tracking-tight ${isBase ? 'text-emerald-400/80' : 'text-zinc-500'}`}>
+                        <span className={`text-[10px] font-bold uppercase  ${isBase ? 'text-emerald-400/80' : 'text-zinc-500'}`}>
                             {isBase ? 'Base Safe Haven' : 'Arbitrum Main'}
                         </span>
                     </div>
@@ -130,11 +145,11 @@ export default function VaultActions({ onSuccess }: { onSuccess?: () => void }) 
                 {isBase ? (
                     <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 shadow-[0_0_10px_rgba(52,211,153,0.1)]">
                         <span className="text-xs">🛡️</span>
-                        <span className="text-[9px] font-bold uppercase tracking-widest">Protected Mode</span>
+                        <span className="text-[9px] font-bold uppercase ">Protected Mode</span>
                     </div>
                 ) : (
                     activePoolCount !== null && (
-                        <span className="text-[10px] font-bold uppercase tracking-widest px-2.5 py-1 rounded-full bg-blue-500/10 text-blue-400 border border-blue-500/20">
+                        <span className="text-[10px] font-bold uppercase  px-2.5 py-1 rounded-full bg-blue-500/10 text-blue-400 border border-blue-500/20">
                             {activePoolCount} Active Strategy
                         </span>
                     )
@@ -144,7 +159,7 @@ export default function VaultActions({ onSuccess }: { onSuccess?: () => void }) 
             {/* ─── CLAIM UI (Prominent on Base) ─── */}
             <AnimatePresence>
                 {unclaimedFunds > 0 && (
-                    <motion.div 
+                    <motion.div
                         initial={{ opacity: 0, height: 0, marginBottom: 0 }}
                         animate={{ opacity: 1, height: 'auto', marginBottom: 24 }}
                         exit={{ opacity: 0, height: 0, marginBottom: 0 }}
@@ -152,14 +167,14 @@ export default function VaultActions({ onSuccess }: { onSuccess?: () => void }) 
                     >
                         {/* Shine effect */}
                         <div className="absolute inset-0 bg-gradient-to-r from-transparent via-cyan-400/5 to-transparent -translate-x-full group-hover:animate-[shimmer_2s_infinite] pointer-events-none" />
-                        
+
                         <div className="flex items-center justify-between relative z-10">
                             <div className="flex items-center gap-3">
                                 <div className="w-10 h-10 rounded-xl bg-cyan-500/20 flex items-center justify-center text-xl shadow-inner">
                                     🎁
                                 </div>
                                 <div className="flex flex-col">
-                                    <span className="text-xs font-black text-cyan-400 uppercase tracking-wider">Bridged Assets Ready</span>
+                                    <span className="text-xs font-black text-cyan-400 uppercase ">Bridged Assets Ready</span>
                                     <span className="text-[10px] text-zinc-400 font-medium">Oracle has finalized your rescue.</span>
                                 </div>
                             </div>
@@ -197,15 +212,15 @@ export default function VaultActions({ onSuccess }: { onSuccess?: () => void }) 
                         <button
                             key={tab}
                             onClick={() => setActiveTab(tab)}
-                            className={`relative flex-1 py-2.5 text-xs font-bold uppercase tracking-widest rounded-lg transition-colors duration-200 ${activeTab === tab
-                                ? 'text-zinc-50'
-                                : 'text-zinc-500 hover:text-zinc-300'
+                            className={`relative flex-1 py-2.5 text-xs font-bold uppercase  rounded-lg transition-colors duration-200 ${activeTab === tab
+                                ? 'text-[#598eff]'
+                                : 'text-white'
                                 }`}
                         >
                             {activeTab === tab && (
                                 <motion.div
                                     layoutId="vault-tab-bg"
-                                    className="absolute inset-0 bg-zinc-700/70 rounded-lg shadow-sm"
+                                    className="absolute inset-0 bg-[rgba(0,0,128,0.5)]/50 rounded-lg shadow-sm"
                                     transition={{ type: 'spring', duration: 0.4, bounce: 0.15 }}
                                 />
                             )}
@@ -226,14 +241,14 @@ export default function VaultActions({ onSuccess }: { onSuccess?: () => void }) 
                     {/* Header for Base Mode Withdraw */}
                     {isBase && (
                         <div className="mb-4">
-                            <h4 className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-1">Portfolio Withdrawal</h4>
+                            <h4 className="text-[10px] font-bold text-zinc-500 uppercase  mb-1">Portfolio Withdrawal</h4>
                             <p className="text-[10px] text-zinc-600">Once claimed, you can withdraw your protected assets to your personal Base wallet.</p>
                         </div>
                     )}
 
                     {/* Balance Info */}
                     <div className="flex items-center justify-between mb-3">
-                        <span className="text-[10px] text-zinc-500 uppercase tracking-widest font-bold">
+                        <span className="text-[10px] text-zinc-500 uppercase  font-bold">
                             {activeTab === 'deposit' ? 'Wallet Balance' : 'Portfolio Shares'}
                         </span>
                         <span className="text-xs font-mono font-medium text-zinc-300">
@@ -259,7 +274,7 @@ export default function VaultActions({ onSuccess }: { onSuccess?: () => void }) 
                         <button
                             onClick={handleMax}
                             disabled={isDepositBusy || isWithdrawBusy}
-                            className="absolute right-4 top-1/2 -translate-y-1/2 px-3 py-1.5 text-[10px] font-black uppercase tracking-widest text-zinc-400 bg-zinc-700/50 rounded-lg hover:bg-zinc-700 hover:text-zinc-200 transition-all disabled:opacity-50"
+                            className="absolute right-4 top-1/2 -translate-y-1/2 px-3 py-1.5 text-[10px] font-black uppercase  text-[#598eff] bg-[rgba(0,0,128,0.5)]/50 rounded-lg hover:bg-[rgba(0,0,128,0.5)]/70 transition-all disabled:opacity-50 border-none"
                         >
                             Max
                         </button>
@@ -278,7 +293,7 @@ export default function VaultActions({ onSuccess }: { onSuccess?: () => void }) 
                                     <button
                                         onClick={() => claimFaucet()}
                                         disabled={isFaucetPending || isFaucetConfirming || (faucetStep as string) === 'success'}
-                                        className={`text-[9px] font-black uppercase tracking-widest px-3 py-1.5 rounded-lg transition-all duration-200 flex items-center gap-1.5 ${(faucetStep as string) === 'success'
+                                        className={`text-[9px] font-black uppercase  px-3 py-1.5 rounded-lg transition-all duration-200 flex items-center gap-1.5 ${(faucetStep as string) === 'success'
                                             ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
                                             : faucetError
                                                 ? 'bg-red-500/10 text-red-400 border border-red-500/20'
@@ -339,16 +354,9 @@ export default function VaultActions({ onSuccess }: { onSuccess?: () => void }) 
                         <button
                             onClick={handleDeposit}
                             disabled={!canDeposit || isDepositBusy || depositStep === 'success'}
-                            className={`w-full py-4 rounded-2xl text-xs font-black uppercase tracking-[0.2em] transition-all duration-200 ${depositStep === 'success'
-                                ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/30'
-                                : depositStep === 'error'
-                                    ? 'bg-red-500/10 text-red-400 border border-red-500/30'
-                                    : canDeposit && !isDepositBusy
-                                        ? 'bg-blue-600 hover:bg-blue-500 text-white shadow-lg shadow-blue-900/20 active:scale-[0.98]'
-                                        : 'bg-zinc-800 text-zinc-600 cursor-not-allowed border border-zinc-700/50'
-                                }`}
+                            className={`w-full py-4 rounded-2xl text-xs font-black uppercase tracking-[0.2em] transition-all duration-200 ${depositStep === 'success' ? 'bg-emerald-500/10 text-emerald-400' : depositStep === 'error' ? 'bg-red-500/10 text-red-400' : canDeposit && !isDepositBusy ? 'bg-[rgba(0,0,128,0.5)]/50 hover:bg-[rgba(0,0,128,0.5)]/70 text-[#598eff] shadow-lg shadow-blue-900/20 active:scale-[0.98]' : 'bg-zinc-800 text-zinc-600 cursor-not-allowed'} border-none`}
                         >
-                            <span className="flex items-center justify-center gap-2">
+                            <span className="flex items-center justify-center gap-2 text-[#598eff]">
                                 {isDepositBusy && (
                                     <span className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
                                 )}
@@ -360,18 +368,9 @@ export default function VaultActions({ onSuccess }: { onSuccess?: () => void }) 
                             <button
                                 onClick={handleWithdraw}
                                 disabled={!canWithdraw || isWithdrawBusy || withdrawStep === 'success'}
-                                className={`w-full py-4 rounded-2xl text-xs font-black uppercase tracking-[0.2em] transition-all duration-200 ${withdrawStep === 'success'
-                                    ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/30'
-                                    : withdrawStep === 'error'
-                                        ? 'bg-red-500/10 text-red-400 border border-red-500/30'
-                                        : canWithdraw && !isWithdrawBusy
-                                            ? isBase 
-                                                ? 'bg-emerald-500 hover:bg-emerald-400 text-zinc-950 shadow-lg shadow-emerald-500/20 active:scale-[0.98]'
-                                                : 'bg-orange-600 hover:bg-orange-500 text-white shadow-lg shadow-orange-900/20 active:scale-[0.98]'
-                                            : 'bg-zinc-800 text-zinc-600 cursor-not-allowed border border-zinc-700/50'
-                                    }`}
+                                className={`w-full py-4 rounded-2xl text-xs font-black uppercase tracking-[0.2em] transition-all duration-200 ${withdrawStep === 'success' ? 'bg-emerald-500/10 text-emerald-400' : withdrawStep === 'error' ? 'bg-red-500/10 text-red-400' : canWithdraw && !isWithdrawBusy ? 'bg-[rgba(0,0,128,0.5)]/50 hover:bg-[rgba(0,0,128,0.5)]/70 text-[#598eff] shadow-lg shadow-blue-500/20 active:scale-[0.98]' : 'bg-zinc-800 text-zinc-600 cursor-not-allowed'} border-none`}
                             >
-                                <span className="flex items-center justify-center gap-2">
+                                <span className="flex items-center justify-center gap-2 text-[#598eff]">
                                     {isWithdrawBusy && (
                                         <span className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
                                     )}
@@ -396,7 +395,7 @@ export default function VaultActions({ onSuccess }: { onSuccess?: () => void }) 
                             </p>
                             <button
                                 onClick={activeTab === 'deposit' ? resetDeposit : resetWithdraw}
-                                className="mt-2 text-[10px] uppercase tracking-widest text-red-400 hover:text-red-300"
+                                className="mt-2 text-[10px] uppercase  text-red-400 hover:text-red-300 border-none"
                             >
                                 Try again
                             </button>
@@ -411,14 +410,14 @@ export default function VaultActions({ onSuccess }: { onSuccess?: () => void }) 
                                 <div className={`w-2 h-2 rounded-full ${depositStep === 'approving' || depositStep === 'waitingApproval' ? 'bg-cyan-400 animate-pulse' :
                                     depositStep === 'success' || depositStep === 'depositing' || depositStep === 'waitingDeposit' ? 'bg-emerald-400' : 'bg-zinc-600'
                                     }`} />
-                                <span className="text-[10px] text-zinc-500 uppercase tracking-widest">Approve</span>
+                                <span className="text-[10px] text-zinc-500 uppercase ">Approve</span>
                             </div>
                             <div className="flex-1 h-px bg-zinc-700" />
                             <div className="flex items-center gap-2">
                                 <div className={`w-2 h-2 rounded-full ${depositStep === 'depositing' || depositStep === 'waitingDeposit' ? 'bg-cyan-400 animate-pulse' :
                                     depositStep === 'success' ? 'bg-emerald-400' : 'bg-zinc-600'
                                     }`} />
-                                <span className="text-[10px] text-zinc-500 uppercase tracking-widest">Deposit</span>
+                                <span className="text-[10px] text-zinc-500 uppercase ">Deposit</span>
                             </div>
                         </div>
                     )}
